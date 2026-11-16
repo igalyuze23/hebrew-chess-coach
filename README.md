@@ -6,6 +6,8 @@
 
 🔗 **להפעלה אונליין:** https://igalyuze23.github.io/hebrew-chess-coach/
 
+📱 **אפליקציית אנדרואיד:** [הורדת APK](https://igalyuze23.github.io/hebrew-chess-coach/download/hebrew-chess-coach.apk) (מתקינים מהקובץ ומאשרים התקנה ממקור לא ידוע; הניתוח והמשחק עובדים גם בלי אינטרנט)
+
 ![ניתוח משחק](docs/screenshot-review.png)
 
 | שחק מול המאמן | מובייל |
@@ -56,6 +58,8 @@
 **A free "premium" chess coach with game analysis and explanations in Hebrew.** It's inspired by chess.com's Game Review and Coach, but it's completely free, needs no sign-up, and works offline. Stockfish 19 runs right in your browser.
 
 🔗 **Live:** https://igalyuze23.github.io/hebrew-chess-coach/
+
+📱 **Android app:** [Download the APK](https://igalyuze23.github.io/hebrew-chess-coach/download/hebrew-chess-coach.apk) (sideload it and allow installing from unknown sources; analysis and play work offline)
 
 ## Features
 
