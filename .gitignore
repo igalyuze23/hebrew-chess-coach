@@ -1,0 +1,21 @@
+# dependencies / tooling
+node_modules/
+package-lock.json
+__pycache__/
+*.pyc
+.venv/
+# test artifacts
+test-results/
+playwright-report/
+*.log
+/tmp/
+# OS / editor junk
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+# archives
+*.zip
+*.bundle

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>מאמן שחמט – ניתוח משחקים בעברית</title>
+<meta name="theme-color" content="#111318">
+<style>
+:root{
+  --bg:#0e1014; --bg2:#14171d; --card:#191c23; --card2:#20242d; --line:#2a2f3a;
+  --text:#e8eaed; --muted:#9aa3b2; --accent:#81b64c; --accent2:#5d9e2f; --danger:#ca3431;
+  --light:#ebecd0; --dark:#739552; --radius:14px;
+  --c-brilliant:#1baca6; --c-great:#5c8bb0; --c-best:#81b64c; --c-excellent:#96bc4b; --c-good:#8aa57a;
+  --c-book:#a88865; --c-inaccuracy:#f0c037; --c-mistake:#e58f2a; --c-blunder:#ca3431; --c-miss:#ee6b55;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,"Segoe UI",Rubik,Heebo,Arial,sans-serif;font-size:15px;line-height:1.55}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:#8fc1ff}
+.san,bdi.san{direction:ltr;unicode-bidi:isolate;font-weight:600;font-family:ui-monospace,"SF Mono",Consolas,monospace;font-size:.95em;white-space:nowrap}
+header{display:flex;align-items:center;gap:14px;padding:10px 18px;background:linear-gradient(180deg,#151820,#111318);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
+.logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px;letter-spacing:.2px}
+.logo .k{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#3f7d20);display:grid;place-items:center;font-size:22px;color:#fff;box-shadow:0 4px 14px #81b64c40}
+.logo small{display:block;font-weight:500;font-size:12px;color:var(--muted)}
+nav.tabs{display:flex;gap:6px;margin-inline-start:auto;background:var(--bg2);padding:4px;border-radius:12px;border:1px solid var(--line)}
+nav.tabs button{border:0;background:transparent;padding:7px 14px;border-radius:9px;cursor:pointer;color:var(--muted);font-weight:600}
+nav.tabs button.on{background:var(--card2);color:var(--text);box-shadow:0 1px 0 #ffffff10 inset}
+#engineStatus{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+#engineStatus .dot{width:8px;height:8px;border-radius:50%;background:#f0c037}
+#engineStatus.ok .dot{background:var(--accent)}
+main{max-width:1320px;margin:0 auto;padding:16px}
+.layout{display:grid;grid-template-columns:minmax(300px,600px) minmax(320px,1fr);gap:18px;align-items:start}
+.boardcol{position:sticky;top:70px}
+.boardwrap{display:flex;gap:8px;direction:ltr}
+.evalbar{width:26px;border-radius:6px;overflow:hidden;background:#403d39;position:relative;flex:0 0 auto;box-shadow:0 0 0 1px #000 inset}
+.evalbar .w{position:absolute;left:0;right:0;bottom:0;background:#f4f4f4;transition:height .35s ease}
+.evalbar.flip .w{top:0;bottom:auto}
+.evalbar .lbl{position:absolute;left:0;right:0;font-size:10.5px;font-weight:800;text-align:center;font-family:ui-monospace,Consolas,monospace}
+.evalbar .lbl.top{top:4px;color:#eee}.evalbar .lbl.bot{bottom:4px;color:#222}
+.board{position:relative;flex:1;aspect-ratio:1/1;border-radius:6px;overflow:hidden;user-select:none;touch-action:none;box-shadow:0 10px 30px #0008;direction:ltr}
+.board .sqs{position:absolute;inset:0;display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr)}
+.sq{position:relative}
+.sq.l{background:var(--light)}.sq.d{background:var(--dark)}
+.sq.hl::before{content:"";position:absolute;inset:0;background:#f6f66980}
+.sq.sel::before{content:"";position:absolute;inset:0;background:#f6f669b0}
+.sq.chk::before{content:"";position:absolute;inset:0;background:radial-gradient(circle,#ff2020d0 0%,#ff202060 45%,transparent 72%)}
+.sq.hint::before{content:"";position:absolute;inset:0;box-shadow:0 0 0 4px #4aa3ff inset;background:#4aa3ff30}
+.sq img{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2}
+.sq .dot{position:absolute;inset:36%;border-radius:50%;background:#0000002e;z-index:3}
+.sq .ring{position:absolute;inset:4%;border-radius:50%;border:5px solid #0000002e;z-index:3}
+.sq .cf,.sq .cr{position:absolute;font-size:11px;font-weight:700;z-index:1;font-family:system-ui}
+.sq .cf{right:3px;bottom:0}.sq .cr{left:3px;top:1px}
+.sq.l .cf,.sq.l .cr{color:var(--dark)}.sq.d .cf,.sq.d .cr{color:var(--light)}
+.badge{position:absolute;top:-6%;right:-6%;width:42%;height:42%;max-width:30px;max-height:30px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:900;font-size:clamp(9px,1.6vw,14px);z-index:6;box-shadow:0 2px 6px #0007;border:2px solid #fff;font-family:system-ui}
+svg.arrows{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:5}
+.ghost{position:fixed;pointer-events:none;z-index:1000;transform:translate(-50%,-50%)}
+.players{display:flex;justify-content:space-between;align-items:center;margin:6px 0 6px 34px;font-size:14px;direction:rtl}
+.players .p{display:flex;gap:8px;align-items:center}
+.players .sw{width:14px;height:14px;border-radius:3px;border:1px solid #000;display:inline-block}
+.navbar{display:flex;gap:6px;justify-content:center;margin-top:10px;direction:ltr;padding-left:34px}
+.btn{background:var(--card2);border:1px solid var(--line);padding:8px 14px;border-radius:10px;cursor:pointer;font-weight:600;transition:.15s}
+.btn:hover{background:#2a2f3a}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:var(--accent2)}
+.btn.sm{padding:5px 10px;font-size:13px}
+.btn.icon{min-width:46px;font-size:18px;padding:6px 10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;margin-bottom:14px}
+.card h3{margin:0 0 10px;font-size:16px;display:flex;align-items:center;gap:8px}
+.seg{display:flex;gap:4px;background:var(--bg2);padding:4px;border-radius:10px;border:1px solid var(--line);margin-bottom:10px;flex-wrap:wrap}
+.seg button{flex:1;border:0;background:transparent;padding:6px 8px;border-radius:7px;cursor:pointer;color:var(--muted);font-weight:600;white-space:nowrap}
+.seg button.on{background:var(--card2);color:var(--text)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+input[type=text],select,textarea{background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;outline:none}
+input[type=text]:focus,textarea:focus,select:focus{border-color:var(--accent)}
+textarea{width:100%;min-height:110px;direction:ltr;font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
+.muted{color:var(--muted)}.small{font-size:12.5px}
+.games{max-height:280px;overflow:auto;margin-top:10px;border-radius:10px;border:1px solid var(--line)}
+.game{display:grid;grid-template-columns:1fr auto;gap:4px 10px;padding:8px 10px;border-bottom:1px solid var(--line);cursor:pointer}
+.game:hover{background:var(--card2)}
+.game:last-child{border-bottom:0}
+.game .who{font-weight:600}.game .meta{font-size:12px;color:var(--muted)}
+.res{font-weight:800;font-size:12px;padding:2px 8px;border-radius:8px;align-self:center}
+.res.win{background:#81b64c30;color:#a7d97a}.res.loss{background:#ca343130;color:#ff8a87}.res.draw{background:#ffffff18;color:#ccc}
+.progress{height:8px;background:var(--bg2);border-radius:6px;overflow:hidden;margin:8px 0}
+.progress>div{height:100%;width:0;background:linear-gradient(90deg,var(--accent),#b5e07f);transition:width .2s}
+.acc{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.accbox{background:var(--bg2);border-radius:12px;padding:10px;text-align:center;border:1px solid var(--line)}
+.accbox .n{font-size:30px;font-weight:800}
+.accbox.white .n{color:#fff}.accbox.black .n{color:#cfd6e4}
+.accbox .who{font-size:12.5px;color:var(--muted)}
+table.counts{width:100%;border-collapse:collapse;margin-top:10px;font-size:13.5px}
+table.counts td{padding:4px 6px;border-bottom:1px solid #ffffff0c}
+table.counts td.num{text-align:center;font-weight:700;width:48px}
+.ci{display:inline-grid;place-items:center;min-width:22px;height:22px;border-radius:50%;color:#fff;font-weight:900;font-size:11.5px;padding:0 3px;vertical-align:middle;font-family:system-ui}
+.moves{max-height:330px;overflow:auto;border-radius:10px;border:1px solid var(--line);direction:ltr}
+.moves table{width:100%;border-collapse:collapse;font-family:ui-monospace,Consolas,monospace;font-size:14px}
+.moves td{padding:3px 6px}
+.moves tr:nth-child(odd){background:#ffffff05}
+.moves td.no{color:var(--muted);width:38px;text-align:right}
+.mv{cursor:pointer;padding:2px 6px;border-radius:6px;display:inline-flex;align-items:center;gap:5px}
+.mv:hover{background:#ffffff14}
+.mv.cur{background:#81b64c40;outline:1px solid #81b64c90}
+.mv .ci{width:18px;min-width:18px;height:18px;font-size:10px}
+.explain{min-height:90px}
+.explain .head{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:17px;font-weight:700}
+.explain .head .ci{width:30px;height:30px;font-size:14px}
+.explain ul{margin:6px 0 0;padding-inline-start:20px}
+.explain li{margin:4px 0}
+.evalline{font-size:13px;color:var(--muted);margin-top:8px}
+.graph{width:100%;height:90px;border-radius:10px;overflow:hidden;background:#2b2a27;cursor:pointer;display:block;direction:ltr}
+.moment{padding:8px 10px;background:var(--bg2);border-radius:10px;margin:6px 0;cursor:pointer;border:1px solid var(--line)}
+.moment:hover{border-color:var(--accent)}
+.tag{display:inline-block;padding:2px 8px;border-radius:20px;background:#ffffff12;font-size:12px;margin:2px}
+.hidden{display:none!important}
+.opening{font-size:13.5px;color:#d9c7a6}
+.coachmsg{background:var(--bg2);border-radius:12px;padding:12px;border:1px solid var(--line);min-height:70px}
+.levels{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.levels button{padding:8px 4px;border-radius:10px;border:1px solid var(--line);background:var(--bg2);cursor:pointer;font-weight:700}
+.levels button small{display:block;font-weight:500;color:var(--muted);font-size:11px}
+.levels button.on{border-color:var(--accent);background:#81b64c22}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#2a2f3a;border:1px solid var(--line);padding:10px 16px;border-radius:12px;z-index:100;box-shadow:0 8px 24px #0009;max-width:90vw}
+.ttsbar{display:flex;gap:8px;justify-content:center;align-items:center;margin-top:8px;flex-wrap:wrap;padding-left:34px}
+.ttsbar select{padding:4px 6px}
+#ttsBtn.on{border-color:var(--accent);background:#81b64c26}
+.ttsnote{margin:8px 0 0 34px;font-size:12.5px;background:#f0c03714;border:1px solid #f0c03755;border-radius:10px;padding:8px 10px;line-height:1.6}
+footer{color:var(--muted);font-size:12px;text-align:center;padding:20px}
+@media (max-width:900px){
+  #reviewPanel{display:flex;flex-direction:column}
+  body.has-game #importCard{order:10}
+  .layout{grid-template-columns:1fr}
+  .boardcol{position:static}
+  header{flex-wrap:wrap;padding:8px 10px}
+  nav.tabs{margin-inline-start:0;order:3;width:100%}
+  nav.tabs button{flex:1}
+  main{padding:10px}
+  .evalbar{width:18px}
+  .players,.navbar,.ttsbar{margin-left:26px;padding-left:0}
+  .ttsnote{margin-left:0}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><div class="k">♞</div><div>מאמן שחמט<small>ניתוח משחקים והסברים בעברית · חינם</small></div></div>
+  <nav class="tabs">
+    <button id="tabReview" class="on">ניתוח משחק</button>
+    <button id="tabPlay">שחק מול המאמן</button>
+  </nav>
+  <div id="engineStatus"><span class="dot"></span><span id="engineText">טוען מנוע…</span></div>
+</header>
+<main>
+<div class="layout">
+  <section class="boardcol">
+    <div class="players"><div class="p" id="topPlayer"></div><div class="small muted" id="topClock"></div></div>
+    <div class="boardwrap">
+      <div class="evalbar" id="evalbar"><div class="w" id="evalW" style="height:50%"></div><div class="lbl top" id="evalTop"></div><div class="lbl bot" id="evalBot">0.0</div></div>
+      <div class="board" id="board"></div>
+    </div>
+    <div class="players"><div class="p" id="botPlayer"></div><div class="small muted"></div></div>
+    <div class="navbar" id="reviewNav">
+      <button class="btn icon" id="navFirst" title="להתחלה">⏮</button>
+      <button class="btn icon" id="navPrev" title="מהלך קודם (←)">◀</button>
+      <button class="btn icon" id="navNext" title="מהלך הבא (→)">▶</button>
+      <button class="btn icon" id="navLast" title="לסוף">⏭</button>
+      <button class="btn icon" id="navFlip" title="הפוך לוח">⇅</button>
+    </div>
+    <div class="ttsbar">
+      <button class="btn sm" id="ttsBtn" title="הפעל/כבה קריין">🔇 קריין</button>
+      <label class="small muted">מהירות
+        <select id="ttsRate"><option value="0.75">0.75</option><option value="1">1</option><option value="1.25">1.25</option><option value="1.5">1.5</option><option value="2">2</option></select>
+      </label>
+      <button class="btn sm" id="autoBtn" title="מעבר אוטומטי על המשחק עם הקראה">▶ ניגון אוטומטי</button>
+    </div>
+    <div class="ttsnote hidden" id="ttsNote"></div>
+    <div class="navbar hidden" id="playNav">
+      <button class="btn" id="hintBtn">💡 רמז</button>
+      <button class="btn" id="whyBtn">למה?</button>
+      <button class="btn" id="undoBtn">↶ חזור</button>
+      <button class="btn icon" id="playFlip" title="הפוך לוח">⇅</button>
+    </div>
+  </section>
+
+  <section id="reviewPanel">
+    <div class="card" id="importCard">
+      <h3>📥 ייבוא משחק</h3>
+      <div class="seg" id="srcSeg">
+        <button data-src="chesscom" class="on">Chess.com</button>
+        <button data-src="lichess">Lichess</button>
+        <button data-src="pgn">הדבקת PGN</button>
+      </div>
+      <div id="srcUser" class="row">
+        <input type="text" id="userInput" placeholder="שם משתמש" style="flex:1;direction:ltr;text-align:left" autocomplete="off" spellcheck="false">
+        <button class="btn primary" id="fetchBtn">הבא משחקים</button>
+      </div>
+      <div id="srcPgn" class="hidden">
+        <textarea id="pgnInput" placeholder="[Event &quot;...&quot;]&#10;1. e4 e5 2. Nf3 ..."></textarea>
+        <div class="row" style="margin-top:8px">
+          <button class="btn primary" id="pgnBtn">נתח PGN</button>
+          <button class="btn" id="sampleBtn">משחק לדוגמה</button>
+        </div>
+      </div>
+      <div class="row small muted" style="margin-top:10px">
+        <label>עומק ניתוח:
+          <select id="depthSel">
+            <option value="10">10 (מהיר)</option><option value="12">12</option><option value="14">14 (מומלץ)</option>
+            <option value="16">16</option><option value="18">18 (איטי)</option><option value="20">20 (איטי מאוד)</option>
+          </select>
+        </label>
+      </div>
+      <div id="importMsg" class="small muted" style="margin-top:8px"></div>
+      <div class="games hidden" id="gamesList"></div>
+    </div>
+
+    <div class="card hidden" id="progressCard">
+      <div class="row" style="justify-content:space-between"><b id="progressText">מנתח…</b><button class="btn sm" id="stopBtn">עצור</button></div>
+      <div class="progress"><div id="progressBar"></div></div>
+    </div>
+
+    <div class="card hidden" id="explainCard">
+      <div class="opening" id="openingName"></div>
+      <div class="explain" id="explainBox"></div>
+    </div>
+
+    <div class="card hidden" id="graphCard">
+      <svg class="graph" id="graph" viewBox="0 0 1000 100" preserveAspectRatio="none"></svg>
+      <div class="moves" id="movesBox" style="margin-top:10px"></div>
+    </div>
+
+    <div class="card hidden" id="summaryCard">
+      <h3>📊 סיכום המשחק</h3>
+      <div id="summaryBox"></div>
+    </div>
+  </section>
+
+  <section id="playPanel" class="hidden">
+    <div class="card">
+      <h3>🎯 שחק מול המאמן</h3>
+      <div class="small muted" style="margin-bottom:6px">בחר רמה:</div>
+      <div class="levels" id="levels"></div>
+      <div class="row" style="margin-top:12px">
+        <span class="small muted">אני משחק עם:</span>
+        <div class="seg" id="colorSeg" style="margin:0;flex:1">
+          <button data-c="w" class="on">לבן</button><button data-c="b">שחור</button><button data-c="r">אקראי</button>
+        </div>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <label class="small"><input type="checkbox" id="autoWhy" checked> הסבר אוטומטי אחרי טעויות</label>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn primary" id="newGameBtn">משחק חדש</button>
+        <button class="btn" id="reviewPlayedBtn">נתח את המשחק הזה</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>🧑‍🏫 המאמן</h3>
+      <div class="coachmsg" id="coachMsg">בחר רמה ולחץ על "משחק חדש". אחרי כל מהלך שלך אפשר ללחוץ על <b>למה?</b> כדי לקבל הסבר, ועל <b>רמז</b> כשנתקעים.</div>
+    </div>
+    <div class="card">
+      <h3>📜 מהלכים</h3>
+      <div class="moves" id="playMoves"></div>
+    </div>
+  </section>
+</div>
+</main>
+<footer>קוד פתוח (GPLv3) · <a href="https://github.com/igalyuze23/hebrew-chess-coach">GitHub</a> · <a href="lib/README.md">רישיונות</a><br>מנוע: Stockfish 19 (lite, WebAssembly) רץ מקומית בדפדפן · ההסברים נוצרים אוטומטית מניתוח המנוע ועשויים להיות לא מדויקים לפעמים</footer>
+<script src="lib/chess-classic.js"></script>
+<script src="lib/sf-bundle.js"></script>

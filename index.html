@@ -1,0 +1,1182 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>מאמן שחמט – ניתוח משחקים בעברית</title>
+<meta name="theme-color" content="#111318">
+<style>
+:root{
+  --bg:#0e1014; --bg2:#14171d; --card:#191c23; --card2:#20242d; --line:#2a2f3a;
+  --text:#e8eaed; --muted:#9aa3b2; --accent:#81b64c; --accent2:#5d9e2f; --danger:#ca3431;
+  --light:#ebecd0; --dark:#739552; --radius:14px;
+  --c-brilliant:#1baca6; --c-great:#5c8bb0; --c-best:#81b64c; --c-excellent:#96bc4b; --c-good:#8aa57a;
+  --c-book:#a88865; --c-inaccuracy:#f0c037; --c-mistake:#e58f2a; --c-blunder:#ca3431; --c-miss:#ee6b55;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,"Segoe UI",Rubik,Heebo,Arial,sans-serif;font-size:15px;line-height:1.55}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:#8fc1ff}
+.san,bdi.san{direction:ltr;unicode-bidi:isolate;font-weight:600;font-family:ui-monospace,"SF Mono",Consolas,monospace;font-size:.95em;white-space:nowrap}
+header{display:flex;align-items:center;gap:14px;padding:10px 18px;background:linear-gradient(180deg,#151820,#111318);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
+.logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px;letter-spacing:.2px}
+.logo .k{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#3f7d20);display:grid;place-items:center;font-size:22px;color:#fff;box-shadow:0 4px 14px #81b64c40}
+.logo small{display:block;font-weight:500;font-size:12px;color:var(--muted)}
+nav.tabs{display:flex;gap:6px;margin-inline-start:auto;background:var(--bg2);padding:4px;border-radius:12px;border:1px solid var(--line)}
+nav.tabs button{border:0;background:transparent;padding:7px 14px;border-radius:9px;cursor:pointer;color:var(--muted);font-weight:600}
+nav.tabs button.on{background:var(--card2);color:var(--text);box-shadow:0 1px 0 #ffffff10 inset}
+#engineStatus{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+#engineStatus .dot{width:8px;height:8px;border-radius:50%;background:#f0c037}
+#engineStatus.ok .dot{background:var(--accent)}
+main{max-width:1320px;margin:0 auto;padding:16px}
+.layout{display:grid;grid-template-columns:minmax(300px,600px) minmax(320px,1fr);gap:18px;align-items:start}
+.boardcol{position:sticky;top:70px}
+.boardwrap{display:flex;gap:8px;direction:ltr}
+.evalbar{width:26px;border-radius:6px;overflow:hidden;background:#403d39;position:relative;flex:0 0 auto;box-shadow:0 0 0 1px #000 inset}
+.evalbar .w{position:absolute;left:0;right:0;bottom:0;background:#f4f4f4;transition:height .35s ease}
+.evalbar.flip .w{top:0;bottom:auto}
+.evalbar .lbl{position:absolute;left:0;right:0;font-size:10.5px;font-weight:800;text-align:center;font-family:ui-monospace,Consolas,monospace}
+.evalbar .lbl.top{top:4px;color:#eee}.evalbar .lbl.bot{bottom:4px;color:#222}
+.board{position:relative;flex:1;aspect-ratio:1/1;border-radius:6px;overflow:hidden;user-select:none;touch-action:none;box-shadow:0 10px 30px #0008;direction:ltr}
+.board .sqs{position:absolute;inset:0;display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr)}
+.sq{position:relative}
+.sq.l{background:var(--light)}.sq.d{background:var(--dark)}
+.sq.hl::before{content:"";position:absolute;inset:0;background:#f6f66980}
+.sq.sel::before{content:"";position:absolute;inset:0;background:#f6f669b0}
+.sq.chk::before{content:"";position:absolute;inset:0;background:radial-gradient(circle,#ff2020d0 0%,#ff202060 45%,transparent 72%)}
+.sq.hint::before{content:"";position:absolute;inset:0;box-shadow:0 0 0 4px #4aa3ff inset;background:#4aa3ff30}
+.sq img{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2}
+.sq .dot{position:absolute;inset:36%;border-radius:50%;background:#0000002e;z-index:3}
+.sq .ring{position:absolute;inset:4%;border-radius:50%;border:5px solid #0000002e;z-index:3}
+.sq .cf,.sq .cr{position:absolute;font-size:11px;font-weight:700;z-index:1;font-family:system-ui}
+.sq .cf{right:3px;bottom:0}.sq .cr{left:3px;top:1px}
+.sq.l .cf,.sq.l .cr{color:var(--dark)}.sq.d .cf,.sq.d .cr{color:var(--light)}
+.badge{position:absolute;top:-6%;right:-6%;width:42%;height:42%;max-width:30px;max-height:30px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:900;font-size:clamp(9px,1.6vw,14px);z-index:6;box-shadow:0 2px 6px #0007;border:2px solid #fff;font-family:system-ui}
+svg.arrows{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:5}
+.ghost{position:fixed;pointer-events:none;z-index:1000;transform:translate(-50%,-50%)}
+.players{display:flex;justify-content:space-between;align-items:center;margin:6px 0 6px 34px;font-size:14px;direction:rtl}
+.players .p{display:flex;gap:8px;align-items:center}
+.players .sw{width:14px;height:14px;border-radius:3px;border:1px solid #000;display:inline-block}
+.navbar{display:flex;gap:6px;justify-content:center;margin-top:10px;direction:ltr;padding-left:34px}
+.btn{background:var(--card2);border:1px solid var(--line);padding:8px 14px;border-radius:10px;cursor:pointer;font-weight:600;transition:.15s}
+.btn:hover{background:#2a2f3a}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:var(--accent2)}
+.btn.sm{padding:5px 10px;font-size:13px}
+.btn.icon{min-width:46px;font-size:18px;padding:6px 10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;margin-bottom:14px}
+.card h3{margin:0 0 10px;font-size:16px;display:flex;align-items:center;gap:8px}
+.seg{display:flex;gap:4px;background:var(--bg2);padding:4px;border-radius:10px;border:1px solid var(--line);margin-bottom:10px;flex-wrap:wrap}
+.seg button{flex:1;border:0;background:transparent;padding:6px 8px;border-radius:7px;cursor:pointer;color:var(--muted);font-weight:600;white-space:nowrap}
+.seg button.on{background:var(--card2);color:var(--text)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+input[type=text],select,textarea{background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;outline:none}
+input[type=text]:focus,textarea:focus,select:focus{border-color:var(--accent)}
+textarea{width:100%;min-height:110px;direction:ltr;font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
+.muted{color:var(--muted)}.small{font-size:12.5px}
+.games{max-height:280px;overflow:auto;margin-top:10px;border-radius:10px;border:1px solid var(--line)}
+.game{display:grid;grid-template-columns:1fr auto;gap:4px 10px;padding:8px 10px;border-bottom:1px solid var(--line);cursor:pointer}
+.game:hover{background:var(--card2)}
+.game:last-child{border-bottom:0}
+.game .who{font-weight:600}.game .meta{font-size:12px;color:var(--muted)}
+.res{font-weight:800;font-size:12px;padding:2px 8px;border-radius:8px;align-self:center}
+.res.win{background:#81b64c30;color:#a7d97a}.res.loss{background:#ca343130;color:#ff8a87}.res.draw{background:#ffffff18;color:#ccc}
+.progress{height:8px;background:var(--bg2);border-radius:6px;overflow:hidden;margin:8px 0}
+.progress>div{height:100%;width:0;background:linear-gradient(90deg,var(--accent),#b5e07f);transition:width .2s}
+.acc{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.accbox{background:var(--bg2);border-radius:12px;padding:10px;text-align:center;border:1px solid var(--line)}
+.accbox .n{font-size:30px;font-weight:800}
+.accbox.white .n{color:#fff}.accbox.black .n{color:#cfd6e4}
+.accbox .who{font-size:12.5px;color:var(--muted)}
+table.counts{width:100%;border-collapse:collapse;margin-top:10px;font-size:13.5px}
+table.counts td{padding:4px 6px;border-bottom:1px solid #ffffff0c}
+table.counts td.num{text-align:center;font-weight:700;width:48px}
+.ci{display:inline-grid;place-items:center;min-width:22px;height:22px;border-radius:50%;color:#fff;font-weight:900;font-size:11.5px;padding:0 3px;vertical-align:middle;font-family:system-ui}
+.moves{max-height:330px;overflow:auto;border-radius:10px;border:1px solid var(--line);direction:ltr}
+.moves table{width:100%;border-collapse:collapse;font-family:ui-monospace,Consolas,monospace;font-size:14px}
+.moves td{padding:3px 6px}
+.moves tr:nth-child(odd){background:#ffffff05}
+.moves td.no{color:var(--muted);width:38px;text-align:right}
+.mv{cursor:pointer;padding:2px 6px;border-radius:6px;display:inline-flex;align-items:center;gap:5px}
+.mv:hover{background:#ffffff14}
+.mv.cur{background:#81b64c40;outline:1px solid #81b64c90}
+.mv .ci{width:18px;min-width:18px;height:18px;font-size:10px}
+.explain{min-height:90px}
+.explain .head{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:17px;font-weight:700}
+.explain .head .ci{width:30px;height:30px;font-size:14px}
+.explain ul{margin:6px 0 0;padding-inline-start:20px}
+.explain li{margin:4px 0}
+.evalline{font-size:13px;color:var(--muted);margin-top:8px}
+.graph{width:100%;height:90px;border-radius:10px;overflow:hidden;background:#2b2a27;cursor:pointer;display:block;direction:ltr}
+.moment{padding:8px 10px;background:var(--bg2);border-radius:10px;margin:6px 0;cursor:pointer;border:1px solid var(--line)}
+.moment:hover{border-color:var(--accent)}
+.tag{display:inline-block;padding:2px 8px;border-radius:20px;background:#ffffff12;font-size:12px;margin:2px}
+.hidden{display:none!important}
+.opening{font-size:13.5px;color:#d9c7a6}
+.coachmsg{background:var(--bg2);border-radius:12px;padding:12px;border:1px solid var(--line);min-height:70px}
+.levels{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.levels button{padding:8px 4px;border-radius:10px;border:1px solid var(--line);background:var(--bg2);cursor:pointer;font-weight:700}
+.levels button small{display:block;font-weight:500;color:var(--muted);font-size:11px}
+.levels button.on{border-color:var(--accent);background:#81b64c22}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#2a2f3a;border:1px solid var(--line);padding:10px 16px;border-radius:12px;z-index:100;box-shadow:0 8px 24px #0009;max-width:90vw}
+.ttsbar{display:flex;gap:8px;justify-content:center;align-items:center;margin-top:8px;flex-wrap:wrap;padding-left:34px}
+.ttsbar select{padding:4px 6px}
+#ttsBtn.on{border-color:var(--accent);background:#81b64c26}
+.ttsnote{margin:8px 0 0 34px;font-size:12.5px;background:#f0c03714;border:1px solid #f0c03755;border-radius:10px;padding:8px 10px;line-height:1.6}
+footer{color:var(--muted);font-size:12px;text-align:center;padding:20px}
+@media (max-width:900px){
+  #reviewPanel{display:flex;flex-direction:column}
+  body.has-game #importCard{order:10}
+  .layout{grid-template-columns:1fr}
+  .boardcol{position:static}
+  header{flex-wrap:wrap;padding:8px 10px}
+  nav.tabs{margin-inline-start:0;order:3;width:100%}
+  nav.tabs button{flex:1}
+  main{padding:10px}
+  .evalbar{width:18px}
+  .players,.navbar,.ttsbar{margin-left:26px;padding-left:0}
+  .ttsnote{margin-left:0}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><div class="k">♞</div><div>מאמן שחמט<small>ניתוח משחקים והסברים בעברית · חינם</small></div></div>
+  <nav class="tabs">
+    <button id="tabReview" class="on">ניתוח משחק</button>
+    <button id="tabPlay">שחק מול המאמן</button>
+  </nav>
+  <div id="engineStatus"><span class="dot"></span><span id="engineText">טוען מנוע…</span></div>
+</header>
+<main>
+<div class="layout">
+  <section class="boardcol">
+    <div class="players"><div class="p" id="topPlayer"></div><div class="small muted" id="topClock"></div></div>
+    <div class="boardwrap">
+      <div class="evalbar" id="evalbar"><div class="w" id="evalW" style="height:50%"></div><div class="lbl top" id="evalTop"></div><div class="lbl bot" id="evalBot">0.0</div></div>
+      <div class="board" id="board"></div>
+    </div>
+    <div class="players"><div class="p" id="botPlayer"></div><div class="small muted"></div></div>
+    <div class="navbar" id="reviewNav">
+      <button class="btn icon" id="navFirst" title="להתחלה">⏮</button>
+      <button class="btn icon" id="navPrev" title="מהלך קודם (←)">◀</button>
+      <button class="btn icon" id="navNext" title="מהלך הבא (→)">▶</button>
+      <button class="btn icon" id="navLast" title="לסוף">⏭</button>
+      <button class="btn icon" id="navFlip" title="הפוך לוח">⇅</button>
+    </div>
+    <div class="ttsbar">
+      <button class="btn sm" id="ttsBtn" title="הפעל/כבה קריין">🔇 קריין</button>
+      <label class="small muted">מהירות
+        <select id="ttsRate"><option value="0.75">0.75</option><option value="1">1</option><option value="1.25">1.25</option><option value="1.5">1.5</option><option value="2">2</option></select>
+      </label>
+      <button class="btn sm" id="autoBtn" title="מעבר אוטומטי על המשחק עם הקראה">▶ ניגון אוטומטי</button>
+    </div>
+    <div class="ttsnote hidden" id="ttsNote"></div>
+    <div class="navbar hidden" id="playNav">
+      <button class="btn" id="hintBtn">💡 רמז</button>
+      <button class="btn" id="whyBtn">למה?</button>
+      <button class="btn" id="undoBtn">↶ חזור</button>
+      <button class="btn icon" id="playFlip" title="הפוך לוח">⇅</button>
+    </div>
+  </section>
+
+  <section id="reviewPanel">
+    <div class="card" id="importCard">
+      <h3>📥 ייבוא משחק</h3>
+      <div class="seg" id="srcSeg">
+        <button data-src="chesscom" class="on">Chess.com</button>
+        <button data-src="lichess">Lichess</button>
+        <button data-src="pgn">הדבקת PGN</button>
+      </div>
+      <div id="srcUser" class="row">
+        <input type="text" id="userInput" placeholder="שם משתמש" style="flex:1;direction:ltr;text-align:left" autocomplete="off" spellcheck="false">
+        <button class="btn primary" id="fetchBtn">הבא משחקים</button>
+      </div>
+      <div id="srcPgn" class="hidden">
+        <textarea id="pgnInput" placeholder="[Event &quot;...&quot;]&#10;1. e4 e5 2. Nf3 ..."></textarea>
+        <div class="row" style="margin-top:8px">
+          <button class="btn primary" id="pgnBtn">נתח PGN</button>
+          <button class="btn" id="sampleBtn">משחק לדוגמה</button>
+        </div>
+      </div>
+      <div class="row small muted" style="margin-top:10px">
+        <label>עומק ניתוח:
+          <select id="depthSel">
+            <option value="10">10 (מהיר)</option><option value="12">12</option><option value="14">14 (מומלץ)</option>
+            <option value="16">16</option><option value="18">18 (איטי)</option><option value="20">20 (איטי מאוד)</option>
+          </select>
+        </label>
+      </div>
+      <div id="importMsg" class="small muted" style="margin-top:8px"></div>
+      <div class="games hidden" id="gamesList"></div>
+    </div>
+
+    <div class="card hidden" id="progressCard">
+      <div class="row" style="justify-content:space-between"><b id="progressText">מנתח…</b><button class="btn sm" id="stopBtn">עצור</button></div>
+      <div class="progress"><div id="progressBar"></div></div>
+    </div>
+
+    <div class="card hidden" id="explainCard">
+      <div class="opening" id="openingName"></div>
+      <div class="explain" id="explainBox"></div>
+    </div>
+
+    <div class="card hidden" id="graphCard">
+      <svg class="graph" id="graph" viewBox="0 0 1000 100" preserveAspectRatio="none"></svg>
+      <div class="moves" id="movesBox" style="margin-top:10px"></div>
+    </div>
+
+    <div class="card hidden" id="summaryCard">
+      <h3>📊 סיכום המשחק</h3>
+      <div id="summaryBox"></div>
+    </div>
+  </section>
+
+  <section id="playPanel" class="hidden">
+    <div class="card">
+      <h3>🎯 שחק מול המאמן</h3>
+      <div class="small muted" style="margin-bottom:6px">בחר רמה:</div>
+      <div class="levels" id="levels"></div>
+      <div class="row" style="margin-top:12px">
+        <span class="small muted">אני משחק עם:</span>
+        <div class="seg" id="colorSeg" style="margin:0;flex:1">
+          <button data-c="w" class="on">לבן</button><button data-c="b">שחור</button><button data-c="r">אקראי</button>
+        </div>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <label class="small"><input type="checkbox" id="autoWhy" checked> הסבר אוטומטי אחרי טעויות</label>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn primary" id="newGameBtn">משחק חדש</button>
+        <button class="btn" id="reviewPlayedBtn">נתח את המשחק הזה</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>🧑‍🏫 המאמן</h3>
+      <div class="coachmsg" id="coachMsg">בחר רמה ולחץ על "משחק חדש". אחרי כל מהלך שלך אפשר ללחוץ על <b>למה?</b> כדי לקבל הסבר, ועל <b>רמז</b> כשנתקעים.</div>
+    </div>
+    <div class="card">
+      <h3>📜 מהלכים</h3>
+      <div class="moves" id="playMoves"></div>
+    </div>
+  </section>
+</div>
+</main>
+<footer>קוד פתוח (GPLv3) · <a href="https://github.com/igalyuze23/hebrew-chess-coach">GitHub</a> · <a href="lib/README.md">רישיונות</a><br>מנוע: Stockfish 19 (lite, WebAssembly) רץ מקומית בדפדפן · ההסברים נוצרים אוטומטית מניתוח המנוע ועשויים להיות לא מדויקים לפעמים</footer>
+<script src="lib/chess-classic.js"></script>
+<script src="lib/sf-bundle.js"></script>
+<script>
+'use strict';
+/* ================= helpers ================= */
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const VAL = {p:1,n:3,b:3,r:5,q:9,k:0};
+const HE = {p:'רגלי',n:'פרש',b:'רץ',r:'צריח',q:'מלכה',k:'מלך'};
+const HED = {p:'הרגלי',n:'הפרש',b:'הרץ',r:'הצריח',q:'המלכה',k:'המלך'};
+const san = s => `<bdi class="san">${s}</bdi>`;
+const sqh = s => `<bdi class="san sq">${s}</bdi>`;
+const other = c => c === 'w' ? 'b' : 'w';
+const LS = {
+  get(k, d){ try{ const v = localStorage.getItem('cc_'+k); return v === null ? d : v; }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem('cc_'+k, v); }catch(e){} }
+};
+function toast(msg, ms=3500){ const t=document.createElement('div'); t.className='toast'; t.innerHTML=msg; document.body.appendChild(t); setTimeout(()=>t.remove(), ms); }
+function esc(s){ return String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* ---- win% & accuracy (lichess formulas) ---- */
+function wpFromCp(cp){ return 50 + 50 * (2/(1+Math.exp(-0.00368208*cp)) - 1); }
+function wpLine(l){ // win% for side to move
+  if(!l) return 50;
+  if(l.mate !== undefined && l.mate !== null){ return l.mate > 0 ? 100 : 0; }
+  return wpFromCp(Math.max(-2000, Math.min(2000, l.cp)));
+}
+function moveAccuracy(loss){ return Math.max(0, Math.min(100, 103.1668*Math.exp(-0.04354*loss) - 3.1669)); }
+function evalText(l, stm){ // white POV text
+  if(!l) return '';
+  if(l.terminal === 'mate') return stm==='w' ? '0-1' : '1-0';
+  if(l.terminal === 'draw') return '½-½';
+  if(l.mate !== undefined && l.mate !== null){ const m = stm==='w' ? l.mate : -l.mate; return (m>0?'M':'-M') + Math.abs(m); }
+  const cp = stm==='w' ? l.cp : -l.cp; return (cp>0?'+':'') + (cp/100).toFixed(1);
+}
+function shortEval(l, stm){ if(!l) return ''; if(l.mate!=null && !l.terminal) return 'M'+Math.abs(l.mate); if(l.terminal) return evalText(l,stm); const cp=Math.abs(stm==='w'?l.cp:-l.cp)/100; return cp>=10?cp.toFixed(0):cp.toFixed(1); }
+
+/* ---- board geometry helpers on a {sq:{type,color}} map ---- */
+function parseFen(fen){
+  const rows = fen.split(' ')[0].split('/'); const b = {};
+  rows.forEach((row,i)=>{ let f=0; for(const ch of row){ if(/\d/.test(ch)) f+=+ch; else { b['abcdefgh'[f]+(8-i)] = {type:ch.toLowerCase(), color: ch===ch.toUpperCase()?'w':'b'}; f++; } } });
+  return b;
+}
+const sqXY = sq => [sq.charCodeAt(0)-97, +sq[1]-1];
+const xySq = (x,y) => (x<0||x>7||y<0||y>7) ? null : String.fromCharCode(97+x)+(y+1);
+const DIR_B=[[1,1],[1,-1],[-1,1],[-1,-1]], DIR_R=[[1,0],[-1,0],[0,1],[0,-1]], DIR_Q=DIR_B.concat(DIR_R);
+const KN=[[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]];
+function attacksFrom(b, sq){
+  const p=b[sq]; if(!p) return []; const [x,y]=sqXY(sq); const out=[];
+  const ray=(dirs,slide)=>dirs.forEach(([dx,dy])=>{ let nx=x+dx, ny=y+dy; for(;;){ const s=xySq(nx,ny); if(!s) break; out.push(s); if(!slide||b[s]) break; nx+=dx; ny+=dy; } });
+  switch(p.type){
+    case 'p': { const d=p.color==='w'?1:-1; [[-1,d],[1,d]].forEach(([dx,dy])=>{ const s=xySq(x+dx,y+dy); if(s) out.push(s); }); break; }
+    case 'n': ray(KN,false); break;
+    case 'b': ray(DIR_B,true); break;
+    case 'r': ray(DIR_R,true); break;
+    case 'q': ray(DIR_Q,true); break;
+    case 'k': ray(DIR_Q,false); break;
+  }
+  return out;
+}
+function attackersOf(b, sq, color){ return Object.keys(b).filter(s => b[s].color===color && s!==sq && attacksFrom(b,s).includes(sq)); }
+function hangingPieces(b, color){
+  const opp=other(color), res=[];
+  for(const s in b){ const p=b[s]; if(p.color!==color || p.type==='k') continue;
+    const def=attackersOf(b,s,color);
+    const att=attackersOf(b,s,opp).filter(a => b[a].type!=='k' || def.length===0);
+    if(!att.length) continue;
+    const minA=Math.min(...att.map(a => b[a].type==='k' ? 100 : VAL[b[a].type]));
+    if(def.length===0 || minA < VAL[p.type]) res.push({sq:s, piece:p, attackers:att, defended:def.length>0});
+  }
+  return res;
+}
+function forkTargets(b, sq){
+  const p=b[sq]; if(!p) return []; const opp=other(p.color);
+  const t = attacksFrom(b,sq).filter(s => b[s] && b[s].color===opp).filter(s => {
+    const q=b[s]; if(q.type==='k') return true; if(VAL[q.type] > VAL[p.type]) return true;
+    return VAL[q.type]>=3 && attackersOf(b,s,opp).length===0;
+  });
+  const big = t.filter(s => b[s].type==='k' || VAL[b[s].type]>=3);
+  return big.length>=2 ? big : [];
+}
+function pinsBy(b, color){
+  const res=[];
+  for(const s in b){ const p=b[s]; if(p.color!==color || !'brq'.includes(p.type)) continue;
+    const dirs = p.type==='b'?DIR_B : p.type==='r'?DIR_R : DIR_Q; const [x,y]=sqXY(s);
+    for(const [dx,dy] of dirs){ let nx=x+dx, ny=y+dy, first=null;
+      for(;;){ const q=xySq(nx,ny); if(!q) break;
+        if(b[q]){ if(!first){ if(b[q].color===color || b[q].type==='k') break; first=q; }
+          else { if(b[q].color!==color && (b[q].type==='k' || (VAL[b[q].type]>VAL[b[first].type] && VAL[b[q].type]>=5))) res.push({pinner:s, pinned:first, behind:q, absolute:b[q].type==='k'}); break; } }
+        nx+=dx; ny+=dy; } }
+  }
+  return res;
+}
+function material(b){ let s=0; for(const k in b){ const v=VAL[b[k].type]; s += b[k].color==='w'?v:-v; } return s; }
+function nonPawnMaterial(b){ let s=0; for(const k in b){ if(!'pk'.includes(b[k].type)) s+=VAL[b[k].type]; } return s; }
+
+/* ---- chess.js helpers ---- */
+function mvFromUci(c, uci){ return c.move({from:uci.slice(0,2), to:uci.slice(2,4), promotion: uci[4] || 'q'}); }
+function uciToMove(fen, uci){ if(!uci) return null; const c=new Chess(fen); return mvFromUci(c, uci); }
+function pvSanList(fen, pv, n=6){ const c=new Chess(fen); const out=[]; for(const u of (pv||[]).slice(0,n)){ const m=mvFromUci(c,u); if(!m) break; out.push(m.san); } return out; }
+function pvText(fen, pv, n=6){
+  const parts=fen.split(' '); let stm=parts[1], no=+parts[5]||1; const sans=pvSanList(fen,pv,n); let out='';
+  sans.forEach((s,i)=>{ if(stm==='w') out+=no+'. '+s+' '; else { out += (i===0? no+'... ':'') + s + ' '; no++; } stm=other(stm); });
+  return san(out.trim());
+}
+function materialAfterLine(fen, pv, minPlies=6){
+  const c=new Chess(fen); let i=0, last=null;
+  for(const u of (pv||[])){ if(i>=minPlies && !(last && last.captured)) break; if(i>=14) break; const m=mvFromUci(c,u); if(!m) break; last=m; i++; }
+  return material(parseFen(c.fen()));
+}
+function cleanPgn(pgn){
+  const headers={}; pgn.replace(/\[(\w+)\s+"((?:[^"\\]|\\.)*)"\]/g, (m,k,v)=>{ headers[k]=v; return ''; });
+  let mt = pgn.replace(/\[[^\]]*\]/g,' ');
+  mt = mt.replace(/\{[^}]*\}/g,' ').replace(/;[^\n]*/g,' ');
+  let prev; do { prev=mt; mt = mt.replace(/\([^()]*\)/g,' '); } while(mt!==prev);
+  mt = mt.replace(/\$\d+/g,' ').replace(/\d+\.\.\./g,' ').replace(/[?!]+/g,'').replace(/\s+/g,' ').trim();
+  return {headers, movetext: mt};
+}
+function splitPgns(text){ return text.replace(/\r/g,'').split(/\n\s*\n(?=\s*\[Event )/).map(s=>s.trim()).filter(s=>/\d\./.test(s)); }
+function gameFromPgn(pgn){
+  const {headers, movetext} = cleanPgn(pgn);
+  const c = new Chess(headers.FEN || undefined);
+  const toks = movetext.split(' ').filter(t => t && !/^\d+\.$/.test(t) && !/^(1-0|0-1|1\/2-1\/2|\*)$/.test(t)).map(t=>t.replace(/^\d+\./,''));
+  const startFen = c.fen(); const fens=[startFen], moves=[];
+  for(const t of toks){ if(!t) continue; const fenBefore=c.fen(); const m=c.move(t, {sloppy:true}); if(!m) throw new Error('מהלך לא חוקי ב-PGN: '+t);
+    moves.push({san:m.san, uci:m.from+m.to+(m.promotion||''), from:m.from, to:m.to, color:m.color, piece:m.piece, captured:m.captured, flags:m.flags, fenBefore, fenAfter:c.fen()}); fens.push(c.fen()); }
+  if(!moves.length) throw new Error('לא נמצאו מהלכים ב-PGN');
+  return {headers, fens, moves, startFen};
+}
+
+/* ================= Engine ================= */
+let SF_URL = null;
+function createSFWorker(){
+  if(window.SF_JS_SRC && window.SF_WASM_B64){
+    if(!SF_URL){
+      // Feed the wasm bytes from inside the worker (fetching blob:/file: URLs fails on file:// pages)
+      const prefix = 'var __SFB="' + window.SF_WASM_B64 + '";(function(){var bin=atob(__SFB),u=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);__SFB=null;var of=self.fetch;self.fetch=function(url,o){if(String(url).indexOf("sfwasm:")===0)return Promise.resolve(new Response(u,{status:200,headers:{"Content-Type":"application/wasm"}}));return of.apply(self,arguments);};})();\n';
+      const jsUrl=URL.createObjectURL(new Blob([prefix, window.SF_JS_SRC],{type:'text/javascript'}));
+      SF_URL = jsUrl + '#' + encodeURIComponent('sfwasm:stockfish.wasm'); }
+    return new Worker(SF_URL);
+  }
+  return new Worker('lib/stockfish-19-lite-single.js');
+}
+class Engine{
+  constructor(name){
+    this.name=name; this.listeners=[]; this.gen=0; this.queue=Promise.resolve();
+    this.w = createSFWorker();
+    this.w.onmessage = e => { const d=e.data; if(typeof d!=='string') return; for(const l of [...this.listeners]) l(d); };
+    this.w.onerror = e => { console.error('engine error', e); setEngineStatus('שגיאה בטעינת המנוע', false); };
+    this.ready = (async()=>{ this.send('uci'); await this.waitFor(l=>l==='uciok'); this.send('setoption name Hash value 32'); this.send('isready'); await this.waitFor(l=>l==='readyok'); })();
+  }
+  send(c){ this.w.postMessage(c); }
+  waitFor(pred){ return new Promise(res=>{ const f=l=>{ if(pred(l)){ this.listeners.splice(this.listeners.indexOf(f),1); res(l); } }; this.listeners.push(f); }); }
+  search(fen, opts={}){ const g=this.gen; const job=this.queue.then(()=> g===this.gen ? this._search(fen,opts) : null); this.queue=job.catch(()=>{}); return job; }
+  cancel(){ this.gen++; this.send('stop'); }
+  newGame(){ this.queue = this.queue.then(()=>{ this.send('ucinewgame'); this.send('isready'); return this.waitFor(l=>l==='readyok'); }); }
+  async _search(fen, {depth=14, multipv=1, movetime=0, skill=20}={}){
+    await this.ready;
+    this.send('setoption name MultiPV value '+multipv);
+    this.send('setoption name Skill Level value '+skill);
+    this.send('position fen '+fen);
+    const stm = fen.split(' ')[1]; const lines={};
+    return new Promise(res=>{
+      const f = l => {
+        if(l.startsWith('info ') && l.includes(' pv ') && !l.includes('bound')){
+          const g=(re)=>{ const m=l.match(re); return m?m[1]:null; };
+          const mp=+(g(/ multipv (\d+)/)||1), d=+g(/ depth (\d+)/), cp=g(/ score cp (-?\d+)/), mate=g(/ score mate (-?\d+)/);
+          const pv=l.split(' pv ')[1].trim().split(' ');
+          lines[mp] = {depth:d, cp: cp!==null?+cp:null, mate: mate!==null?+mate:null, pv};
+        } else if(l.startsWith('bestmove')){
+          this.listeners.splice(this.listeners.indexOf(f),1);
+          const bm=l.split(' ')[1];
+          const arr=Object.keys(lines).sort((a,b)=>a-b).map(k=>lines[k]);
+          if(!arr.length && bm && bm!=='(none)') arr.push({depth:0, cp:0, mate:null, pv:[bm]});
+          res({lines:arr, bestmove:bm, stm});
+        }
+      };
+      this.listeners.push(f);
+      this.send('go' + (depth?' depth '+depth:'') + (movetime?' movetime '+movetime:''));
+    });
+  }
+}
+function setEngineStatus(t, ok){ $('#engineText').textContent=t; $('#engineStatus').classList.toggle('ok', !!ok); }
+
+/* terminal-position aware analysis */
+function terminalInfo(fen){ const c=new Chess(fen); if(c.in_checkmate()) return {lines:[{terminal:'mate', mate:0, cp:null, pv:[]}], stm:fen.split(' ')[1], terminal:true};
+  if(c.in_stalemate() || c.insufficient_material() || c.in_threefold_repetition()) return {lines:[{terminal:'draw', cp:0, mate:null, pv:[]}], stm:fen.split(' ')[1], terminal:true};
+  return null; }
+function wpWhite(an){ if(!an) return 50; const l=an.lines[0]; let wp = l.terminal==='mate' ? 0 : l.terminal==='draw' ? 50 : wpLine(l); return an.stm==='w' ? wp : 100-wp; }
+
+/* ================= Board UI ================= */
+const PIECE_IMG = {}; ['w','b'].forEach(c=>'kqrbnp'.split('').forEach(t=>{ PIECE_IMG[c+t]='lib/pieces/'+c+t.toUpperCase()+'.svg'; }));
+class BoardUI{
+  constructor(el, opts={}){
+    this.el=el; this.opts=opts; this.flip=false; this.fen='8/8/8/8/8/8/8/8 w - - 0 1'; this.hl=[]; this.arrows=[]; this.badge=null; this.sel=null; this.dots=[]; this.hint=null; this.check=null;
+    el.innerHTML='<div class="sqs"></div><svg class="arrows" viewBox="0 0 800 800"></svg>';
+    this.sqsEl=el.querySelector('.sqs'); this.svg=el.querySelector('svg');
+    el.addEventListener('pointerdown', e=>this.down(e));
+    window.addEventListener('pointermove', e=>this.move(e));
+    window.addEventListener('pointerup', e=>this.up(e));
+  }
+  set(o){ Object.assign(this, o); this.render(); }
+  sqCenter(sq){ const [x,y]=sqXY(sq); const cx=this.flip?7-x:x, cy=this.flip?y:7-y; return [cx*100+50, cy*100+50]; }
+  render(){
+    const b=parseFen(this.fen); let h='';
+    for(let r=0;r<8;r++) for(let f=0;f<8;f++){
+      const x=this.flip?7-f:f, y=this.flip?r:7-r; const sq=xySq(x,y); const light=(x+y)%2===1;
+      const cls=['sq', light?'l':'d']; if(this.hl.includes(sq)) cls.push('hl'); if(this.sel===sq) cls.push('sel'); if(this.check===sq) cls.push('chk'); if(this.hint===sq) cls.push('hint');
+      let inner=''; const p=b[sq];
+      if(p) inner+=`<img src="${PIECE_IMG[p.color+p.type]}" alt="" draggable="false" ${this.dragFrom===sq?'style="opacity:.25"':''}>`;
+      if(this.dots.includes(sq)) inner+= p?'<div class="ring"></div>':'<div class="dot"></div>';
+      if(r===7) inner+=`<span class="cf" style="right:auto;left:3px">${'abcdefgh'[x]}</span>`;
+      if(f===0) inner+=`<span class="cr">${y+1}</span>`;
+      if(this.badge && this.badge.sq===sq) inner+=`<div class="badge" style="background:${this.badge.color}">${this.badge.sym}</div>`;
+      h+=`<div class="${cls.join(' ')}" data-sq="${sq}">${inner}</div>`;
+    }
+    this.sqsEl.innerHTML=h;
+    let s='<defs>'; const cols=[...new Set(this.arrows.map(a=>a.color))]; cols.forEach((c,i)=>{ s+=`<marker id="ah${i}" markerWidth="4" markerHeight="4" refX="2.2" refY="2" orient="auto"><path d="M0,0 L4,2 L0,4 z" fill="${c}"/></marker>`; }); s+='</defs>';
+    for(const a of this.arrows){ const [x1,y1]=this.sqCenter(a.from), [x2,y2]=this.sqCenter(a.to); const dx=x2-x1, dy=y2-y1, len=Math.hypot(dx,dy); const ex=x2-dx/len*28, ey=y2-dy/len*28;
+      s+=`<line x1="${x1}" y1="${y1}" x2="${ex}" y2="${ey}" stroke="${a.color}" stroke-width="${a.w||18}" stroke-linecap="round" opacity="${a.op||.85}" marker-end="url(#ah${cols.indexOf(a.color)})"/>`; }
+    this.svg.innerHTML=s;
+  }
+  sqAt(x,y){ const r=this.el.getBoundingClientRect(); if(x<r.left||x>r.right||y<r.top||y>r.bottom) return null; let f=Math.floor((x-r.left)/r.width*8), rr=Math.floor((y-r.top)/r.height*8); f=Math.min(7,Math.max(0,f)); rr=Math.min(7,Math.max(0,rr)); return this.flip? xySq(7-f, rr) : xySq(f, 7-rr); }
+  down(e){
+    if(!this.opts.interactive || !this.opts.interactive()) return;
+    const sq=this.sqAt(e.clientX,e.clientY); if(!sq) return; e.preventDefault();
+    if(this.sel && this.dots.includes(sq)){ const from=this.sel; this.clearSel(); this.opts.onMove(from, sq); return; }
+    const b=parseFen(this.fen); const p=b[sq];
+    if(p && this.opts.canPick(p.color)){
+      this.sel=sq; this.dots=this.opts.targets(sq); this.dragFrom=sq; this.render();
+      const img=document.createElement('img'); img.src=PIECE_IMG[p.color+p.type]; img.className='ghost'; const size=this.el.getBoundingClientRect().width/8; img.style.width=img.style.height=size+'px'; img.style.left=e.clientX+'px'; img.style.top=e.clientY+'px'; document.body.appendChild(img); this.ghost=img;
+    } else this.clearSel();
+  }
+  move(e){ if(this.ghost){ this.ghost.style.left=e.clientX+'px'; this.ghost.style.top=e.clientY+'px'; } }
+  up(e){
+    if(!this.ghost) return; this.ghost.remove(); this.ghost=null; const from=this.dragFrom; this.dragFrom=null;
+    const sq=this.sqAt(e.clientX,e.clientY);
+    if(sq && sq!==from && this.dots.includes(sq)){ this.clearSel(); this.opts.onMove(from, sq); return; }
+    this.render();
+  }
+  clearSel(){ this.sel=null; this.dots=[]; this.dragFrom=null; this.render(); }
+}
+function setEvalBar(wpW, text, flip){
+  const bar=$('#evalbar'); bar.classList.toggle('flip', flip);
+  $('#evalW').style.height = Math.max(2, Math.min(98, wpW)) + '%';
+  const whiteAhead = wpW>=50;
+  const top=$('#evalTop'), bot=$('#evalBot');
+  // label sits on the side of whoever is ahead
+  const onBottom = flip ? !whiteAhead : whiteAhead;
+  top.textContent = onBottom ? '' : text; bot.textContent = onBottom ? text : '';
+  top.style.color = whiteAhead ? '#222' : '#eee'; bot.style.color = whiteAhead ? '#222' : '#eee';
+}
+
+/* ================= Openings (small ECO list, Hebrew names) ================= */
+const OPENINGS = [
+ ['e4','פתיחת רגלי המלך',"King's Pawn"],['d4','פתיחת רגלי המלכה',"Queen's Pawn"],['c4','הפתיחה האנגלית','English Opening'],['Nf3','פתיחת רטי','Réti Opening'],
+ ['f4','פתיחת בירד',"Bird's Opening"],['b3','פתיחת לרסן','Nimzo-Larsen'],['g3','פתיחת בניקו (פיאנקטו)','Benko/Hungarian'],['e3',"פתיחת ואן קרויק","Van 't Kruijs"],
+ ['e4 e5','משחק פתוח',"Open Game"],['e4 e5 Nf3','פתיחת פרש המלך',"King's Knight"],['e4 e5 Nf3 Nc6','משחק פתוח – פרשים',"King's Knight"],
+ ['e4 e5 Nf3 Nc6 Bb5','הפתיחה הספרדית (רואי לופז)','Ruy Lopez'],['e4 e5 Nf3 Nc6 Bb5 a6','ספרדית – וריאנט מורפי','Ruy Lopez: Morphy'],['e4 e5 Nf3 Nc6 Bb5 Nf6','ספרדית – ההגנה הברלינאית','Ruy Lopez: Berlin'],
+ ['e4 e5 Nf3 Nc6 Bc4','הפתיחה האיטלקית','Italian Game'],['e4 e5 Nf3 Nc6 Bc4 Bc5','ג׳וקו פיאנו','Giuoco Piano'],['e4 e5 Nf3 Nc6 Bc4 Bc5 c3','ג׳וקו פיאנו – c3','Giuoco Piano: Main'],
+ ['e4 e5 Nf3 Nc6 Bc4 Bc5 b4','גמביט אוונס','Evans Gambit'],['e4 e5 Nf3 Nc6 Bc4 Nf6','הגנת שני הפרשים','Two Knights Defense'],['e4 e5 Nf3 Nc6 Bc4 Nf6 Ng5','שני הפרשים – התקפת Ng5','Two Knights: Knight Attack'],
+ ['e4 e5 Nf3 Nc6 Bc4 Be7','ההגנה ההונגרית','Hungarian Defense'],['e4 e5 Nf3 Nc6 d4','הפתיחה הסקוטית','Scotch Game'],['e4 e5 Nf3 Nc6 Nc3','ארבעת הפרשים (שלושה)','Three Knights'],
+ ['e4 e5 Nf3 Nc6 Nc3 Nf6','פתיחת ארבעת הפרשים','Four Knights'],['e4 e5 Nf3 Nc6 c3','פתיחת פונציאני','Ponziani'],['e4 e5 Nf3 Nf6','ההגנה הרוסית (פטרוב)','Petrov Defense'],
+ ['e4 e5 Nf3 d6','הגנת פילידור','Philidor Defense'],['e4 e5 Nf3 f6','הגנת דמיאנו','Damiano Defense'],['e4 e5 Nf3 d5','גמביט אלבין-לטבי','Elephant Gambit'],['e4 e5 Nf3 f5','הגמביט הלטבי','Latvian Gambit'],
+ ['e4 e5 f4','גמביט המלך',"King's Gambit"],['e4 e5 f4 exf4','גמביט המלך המקובל',"King's Gambit Accepted"],['e4 e5 Nc3','הפתיחה הווינאית','Vienna Game'],['e4 e5 Bc4','פתיחת הרץ',"Bishop's Opening"],
+ ['e4 e5 Qh5','פתיחת פרהם (מלכה מוקדמת)','Parham Attack'],['e4 e5 d4','משחק המרכז','Center Game'],['e4 e5 d4 exd4 c3','הגמביט הדני','Danish Gambit'],['e4 e5 Ke2','פתיחת "בונגקלאוד"','Bongcloud'],
+ ['e4 c5','ההגנה הסיציליאנית','Sicilian Defense'],['e4 c5 Nf3','סיציליאנית – Nf3','Sicilian'],['e4 c5 Nf3 d6','סיציליאנית – d6','Sicilian: Modern'],['e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 a6','סיציליאנית – נאידורף','Sicilian: Najdorf'],
+ ['e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 g6','סיציליאנית – הדרקון','Sicilian: Dragon'],['e4 c5 Nf3 Nc6','סיציליאנית – Nc6','Sicilian: Old'],['e4 c5 Nf3 e6','סיציליאנית – e6','Sicilian: French Var.'],
+ ['e4 c5 Nf3 d6 Bb5+','סיציליאנית – וריאנט מוסקבה','Sicilian: Moscow'],['e4 c5 Nf3 Nc6 Bb5','סיציליאנית – רוסולימו','Sicilian: Rossolimo'],['e4 c5 c3','סיציליאנית – אלאפין','Sicilian: Alapin'],
+ ['e4 c5 Nc3','סיציליאנית סגורה','Closed Sicilian'],['e4 c5 d4 cxd4 c3','גמביט סמית׳-מורה','Smith-Morra Gambit'],['e4 c5 f4','סיציליאנית – התקפת גרנד פרי','Grand Prix Attack'],
+ ['e4 e6','ההגנה הצרפתית','French Defense'],['e4 e6 d4 d5','ההגנה הצרפתית','French Defense'],['e4 e6 d4 d5 e5','צרפתית – וריאנט ההתקדמות','French: Advance'],['e4 e6 d4 d5 exd5','צרפתית – וריאנט החילוף','French: Exchange'],
+ ['e4 e6 d4 d5 Nc3 Bb4','צרפתית – וינאוור','French: Winawer'],['e4 e6 d4 d5 Nc3 Nf6','צרפתית – קלאסית','French: Classical'],['e4 e6 d4 d5 Nd2','צרפתית – טראש','French: Tarrasch'],
+ ['e4 c6','הגנת קרו-קאן','Caro-Kann'],['e4 c6 d4 d5','הגנת קרו-קאן','Caro-Kann'],['e4 c6 d4 d5 e5','קרו-קאן – וריאנט ההתקדמות','Caro-Kann: Advance'],['e4 c6 d4 d5 exd5 cxd5','קרו-קאן – וריאנט החילוף','Caro-Kann: Exchange'],
+ ['e4 c6 d4 d5 Nc3 dxe4 Nxe4 Bf5','קרו-קאן – קלאסית','Caro-Kann: Classical'],['e4 d5','ההגנה הסקנדינבית','Scandinavian'],['e4 d5 exd5 Qxd5','סקנדינבית – Qxd5','Scandinavian: Main'],
+ ['e4 d6','הגנת פירץ','Pirc Defense'],['e4 g6','ההגנה המודרנית','Modern Defense'],['e4 Nf6','הגנת אלכין','Alekhine Defense'],['e4 Nc6','הגנת נימצוביץ׳','Nimzowitsch Defense'],['e4 b6','הגנת אוון',"Owen's Defense"],
+ ['d4 d5','משחק רגלי המלכה',"Queen's Pawn Game"],['d4 d5 c4','גמביט המלכה',"Queen's Gambit"],['d4 d5 c4 e6','גמביט המלכה הנדחה',"QGD"],['d4 d5 c4 dxc4','גמביט המלכה המקובל',"QGA"],
+ ['d4 d5 c4 c6','ההגנה הסלאבית','Slav Defense'],['d4 d5 c4 c6 Nf3 Nf6 Nc3 e6','ההגנה החצי-סלאבית','Semi-Slav'],['d4 d5 c4 e5','קונטר-גמביט אלבין','Albin Countergambit'],['d4 d5 c4 Nc6','הגנת צ׳יגורין','Chigorin'],
+ ['d4 d5 Bf4','מערך לונדון','London System'],['d4 d5 Nf3 Nf6 Bf4','מערך לונדון','London System'],['d4 Nf6 Bf4','מערך לונדון','London System'],['d4 d5 Nf3 Nf6 Bf4 e6','מערך לונדון','London System'],
+ ['d4 d5 e3','מערך קולה','Colle System'],['d4 d5 Bg5','פתיחת ורסוב/לוי','Levitsky Attack'],['d4 d5 e4','גמביט בלקמר-דימר','Blackmar-Diemer'],['d4 Nf6','הגנות הודיות','Indian Defense'],
+ ['d4 Nf6 c4','הגנות הודיות','Indian Defense'],['d4 Nf6 c4 g6','הגנה הודית של המלך','King\'s Indian'],['d4 Nf6 c4 g6 Nc3 Bg7','הגנה הודית של המלך','King\'s Indian'],['d4 Nf6 c4 g6 Nc3 d5','הגנת גרינפלד','Grünfeld'],
+ ['d4 Nf6 c4 e6','הגנות הודיות – e6','Indian: e6'],['d4 Nf6 c4 e6 Nc3 Bb4','ההגנה הנימצו-הודית','Nimzo-Indian'],['d4 Nf6 c4 e6 Nf3 b6','הגנה הודית של המלכה',"Queen's Indian"],['d4 Nf6 c4 e6 g3','הפתיחה הקטלאנית','Catalan'],
+ ['d4 Nf6 c4 c5','בנוני','Benoni'],['d4 Nf6 c4 c5 d5 b5','גמביט בנקו','Benko Gambit'],['d4 Nf6 c4 e5','גמביט בודפשט','Budapest Gambit'],['d4 Nf6 Bg5','התקפת טרומפובסקי','Trompowsky'],
+ ['d4 f5','ההגנה ההולנדית','Dutch Defense'],['d4 e6','הגנת רגלי המלכה – e6',"Queen's Pawn: e6"],['d4 d6','הגנת רגלי המלכה – d6',"Queen's Pawn: d6"],['d4 g6','ההגנה המודרנית','Modern Defense'],
+ ['c4 e5','אנגלית – סיציליאנית הפוכה','English: Reversed Sicilian'],['c4 Nf6','אנגלית – אנגלו-הודית','English: Anglo-Indian'],['c4 c5','אנגלית – סימטרית','English: Symmetrical'],
+ ['Nf3 d5','פתיחת רטי','Réti'],['Nf3 Nf6','פתיחת רטי','Réti'],['Nf3 d5 g3','התקפה הודית של המלך','King\'s Indian Attack'],
+];
+const OPEN_MAP = OPENINGS.map(([m,he,en])=>({moves:m.split(' '), he, en}));
+function detectOpening(sans){
+  const clean = sans.map(s=>s.replace(/[+#]/g,''));
+  let best=null;
+  for(const o of OPEN_MAP){ if(o.moves.length>clean.length) continue; if(o.moves.every((m,i)=>m.replace(/[+#]/g,'')===clean[i])) if(!best || o.moves.length>best.moves.length) best=o; }
+  return best;
+}
+
+/* ================= Classification & Explanations ================= */
+const CLS = {
+  brilliant:{he:'מבריק', sym:'!!', color:'var(--c-brilliant)', hex:'#1baca6'},
+  great:{he:'מהלך גדול', sym:'!', color:'var(--c-great)', hex:'#5c8bb0'},
+  best:{he:'הטוב ביותר', sym:'★', color:'var(--c-best)', hex:'#81b64c'},
+  excellent:{he:'מצוין', sym:'✓', color:'var(--c-excellent)', hex:'#96bc4b'},
+  good:{he:'טוב', sym:'✓', color:'var(--c-good)', hex:'#8aa57a'},
+  book:{he:'ספר (תיאוריה)', sym:'≡', color:'var(--c-book)', hex:'#a88865'},
+  inaccuracy:{he:'אי-דיוק', sym:'?!', color:'var(--c-inaccuracy)', hex:'#f0c037'},
+  mistake:{he:'טעות', sym:'?', color:'var(--c-mistake)', hex:'#e58f2a'},
+  miss:{he:'החמצה', sym:'✗', color:'var(--c-miss)', hex:'#ee6b55'},
+  blunder:{he:'טעות גסה', sym:'??', color:'var(--c-blunder)', hex:'#ca3431'},
+};
+const CLS_ORDER=['brilliant','great','best','excellent','good','book','inaccuracy','mistake','miss','blunder'];
+const ci = k => `<span class="ci" style="background:${CLS[k].hex}">${CLS[k].sym}</span>`;
+
+function povText(l, sign){ if(l.terminal==='mate') return sign>0?'מט':'מט'; if(l.mate!=null) return (l.mate*sign>0?'M':'-M')+Math.abs(l.mate); const v=l.cp*sign/100; return (v>0?'+':'')+v.toFixed(1); }
+function gv(t,m,f){ return t==='q'?f:m; }
+function sacrificeInfo(mv){
+  // is the moved piece left en prise so that the opponent can win material by taking it?
+  if(mv.piece==='p' || mv.piece==='k') return null;
+  const b=parseFen(mv.fenAfter); const p=b[mv.to]; if(!p) return null;
+  const opp=other(mv.color);
+  const c=new Chess(mv.fenAfter); const caps=c.moves({verbose:true}).filter(m=>m.to===mv.to);
+  if(!caps.length) return null;
+  const minCap=Math.min(...caps.map(m=>m.piece==='k'?100:VAL[m.piece]));
+  const def=attackersOf(b,mv.to,mv.color).length;
+  const gained = mv.captured ? VAL[mv.captured] : 0;
+  const risk = def ? Math.max(0, VAL[p.type]-minCap) : VAL[p.type];
+  if(risk - gained >= 1 && VAL[p.type]>=3) return {piece:p.type, net:risk-gained};
+  return null;
+}
+
+function classify(mv, anB, anA, ply, bookLen, prevCls, prevMv){
+  const mover=mv.color;
+  const lB=anB.lines[0], lA=anA.lines[0];
+  const wpB = wpLine(lB);                     // mover POV (mover is stm before)
+  const wpA = lA.terminal==='mate' ? 100 : lA.terminal==='draw' ? 50 : 100 - wpLine(lA); // stm after = opponent
+  let loss = Math.max(0, wpB - wpA);
+  const bestUci = lB.pv && lB.pv[0];
+  const isBest = mv.uci===bestUci || (lA.terminal==='mate');
+  if(isBest) loss=0;
+  let cls;
+  if(ply < bookLen && loss < 6) cls='book';
+  else if(isBest){
+    cls='best';
+    const second = anB.lines[1];
+    const legal = new Chess(mv.fenBefore).moves().length;
+    const sac = sacrificeInfo(mv);
+    if(sac && wpA >= 50 && (wpB < 98 || (lB.mate!=null && lB.mate>0))) cls='brilliant';
+    else if(second && legal>1 && wpB < 97 && (wpB - wpLine(second)) >= 15 && !(mv.captured && prevMv && prevMv.captured && prevMv.to===mv.to)) cls='great';
+  }
+  else if(loss < 2) cls='excellent';
+  else if(loss < 5) cls='good';
+  else if(loss < 10) cls='inaccuracy';
+  else {
+    const hadWin = wpB >= 75 || (lB.mate!=null && lB.mate>0);
+    const oppErred = prevCls==='mistake' || prevCls==='blunder' || prevCls==='miss';
+    if(hadWin && wpA >= 40 && (oppErred || wpB>=85)) cls='miss';
+    else cls = loss < 20 ? 'mistake' : 'blunder';
+  }
+  return {cls, loss, wpB, wpA, isBest, acc: moveAccuracy(loss)};
+}
+function prevCaptureOn(mv){ // simple recapture detection: previous position had a piece of ours captured on this square
+  return false;
+}
+
+function phaseOf(fen, ply){ const b=parseFen(fen); if(ply<20 && nonPawnMaterial(b)>=26) return 'opening'; if(nonPawnMaterial(b)<=14) return 'endgame'; return 'middlegame'; }
+
+/* Hebrew explanation (rule-based on top of engine output). Returns {html, tags} */
+function explainMove(mv, anB, anA, res, opening){
+  const out=[]; const tags=new Set();
+  const mover=mv.color, opp=other(mover);
+  const lB=anB.lines[0], lA=anA.lines[0];
+  const bB=parseFen(mv.fenBefore), bA=parseFen(mv.fenAfter);
+  const bestUci=lB.pv && lB.pv[0];
+  const best = bestUci ? uciToMove(mv.fenBefore, bestUci) : null;
+  const bad = ['inaccuracy','mistake','blunder','miss'].includes(res.cls);
+  const c = new Chess(mv.fenAfter);
+
+  // --- what the move itself does ---
+  const self=[];
+  if(c.in_checkmate()) self.push('זה <b>מט</b>! סוף המשחק.');
+  else {
+    if(mv.captured) self.push(`המהלך לוקח את ${HED[mv.captured]} ב-${sqh(mv.to)}.`);
+    const ft=forkTargets(bA, mv.to);
+    if(ft.length) { self.push(`<b>מזלג!</b> ${HED[mv.piece]} ב-${sqh(mv.to)} ${gv(mv.piece,'תוקף','תוקפת')} בבת אחת את ${ft.map(s=>HED[bA[s].type]+' ב-'+sqh(s)).join(' ואת ')}.`); tags.add('didFork'); }
+    const pinsNew = pinsBy(bA, mover).filter(p=>p.pinner===mv.to);
+    if(pinsNew.length){ const p=pinsNew[0]; self.push(`נוצרת <b>הצמדה</b> על ${HED[bA[p.pinned].type]} ב-${sqh(p.pinned)}, מול ${HED[bA[p.behind].type]} ב-${sqh(p.behind)}${p.absolute?' (הצמדה מוחלטת: אסור לו לזוז)':''}.`); }
+    if(c.in_check() && !self.length) self.push('המהלך נותן <b>שח</b>.');
+    if(mv.flags.includes('k')||mv.flags.includes('q')) self.push('הצרחה – המלך עובר למקום בטוח והצריח נכנס למשחק.');
+  }
+
+  if(res.cls==='book') out.push(`מהלך תיאורטי${opening?` מתוך <b>${opening.he}</b>`:''}. ככה משחקים שחקנים חזקים בפתיחה הזו.`);
+  else if(res.cls==='brilliant'){ const s=sacrificeInfo(mv); out.push(`<b>הקרבה מבריקה!</b> ${s?`${HED[s.piece]} ב-${sqh(mv.to)} ${gv(s.piece,'נשאר','נשארת')} להכאה`:'החומר מוקרב'}, אבל המנוע מאשר שזה המהלך החזק ביותר בעמדה.`); }
+  else if(res.cls==='great') out.push('<b>המהלך היחיד</b> ששומר על העמדה. כל מהלך אחר היה גרוע בהרבה. כל הכבוד על המציאה!');
+  else if(res.cls==='best') out.push('זה המהלך הטוב ביותר לפי המנוע.');
+  else if(res.cls==='excellent') out.push(`מהלך מצוין, כמעט טוב כמו המהלך של המנוע (${best?san(best.san):''}).`);
+  else if(res.cls==='good') out.push(`מהלך סביר, אבל ${best?san(best.san):'מהלך אחר'} היה מדויק יותר.`);
+  self.forEach(s=>out.push(s));
+
+  if(bad && best){
+    // mates
+    if(lB.mate!=null && lB.mate>0 && !(lA.mate!=null && lA.mate<0)){
+      out.push(`היה <b>מט ב-${lB.mate}</b>: ${pvText(mv.fenBefore, lB.pv, Math.min(lB.mate*2-1, 9))}`); tags.add('missedMate');
+    }
+    if(lA.mate!=null && lA.mate>0 && !(lB.mate!=null && lB.mate<0)){
+      out.push(`⚠️ אחרי המהלך הזה ליריב יש <b>מט ב-${lA.mate}</b>: ${pvText(mv.fenAfter, lA.pv, Math.min(lA.mate*2-1, 9))}`); tags.add('allowedMate');
+    }
+    out.push(`המהלך הטוב יותר היה ${san(best.san)}. המשך אפשרי: ${pvText(mv.fenBefore, lB.pv, 6)}`);
+
+    // what the best move would have achieved
+    if(best.captured){
+      const hangOpp = hangingPieces(bB, opp).map(h=>h.sq);
+      if(hangOpp.includes(best.to)){ out.push(`פוספסה <b>לקיחה חינמית</b>: ${HED[best.captured]} ב-${sqh(best.to)} ${gv(best.captured,'לא היה מוגן מספיק','לא הייתה מוגנת מספיק')}.`); tags.add('missedCapture'); }
+    }
+    { const cc=new Chess(mv.fenBefore); mvFromUci(cc,bestUci); const bb=parseFen(cc.fen()); const ft=forkTargets(bb,best.to); if(ft.length){ out.push(`${san(best.san)} היה יוצר <b>מזלג</b> על ${ft.map(s=>HED[bb[s].type]+' ב-'+sqh(s)).join(' ועל ')}.`); tags.add('missedFork'); } }
+
+    // what the move allowed: opponent best reply
+    const nBefore = out.length;
+    const replyUci = lA.pv && lA.pv[0];
+    if(replyUci){
+      const cc=new Chess(mv.fenAfter); const reply=mvFromUci(cc, replyUci);
+      if(reply){
+        const bR=parseFen(cc.fen());
+        const hangAfter = hangingPieces(bA, mover); const hangBefore = hangingPieces(bB, mover);
+        const hangSqs = hangAfter.map(h=>h.sq);
+        if(reply.captured && hangSqs.includes(reply.to)){
+          const wasThreat = hangBefore.some(h=>h.sq===reply.to) && mv.from!==reply.to;
+          if(reply.to===mv.to) { out.push(`${HED[mv.piece]} ${gv(mv.piece,'שעבר','שעברה')} ל-${sqh(mv.to)} <b>${gv(mv.piece,'לא מוגן מספיק','לא מוגנת מספיק')}</b>, והיריב יכול לאכול ${gv(mv.piece,'אותו','אותה')}: ${san(reply.san)}.`); tags.add('hanging'); }
+          else if(wasThreat){ out.push(`המהלך <b>מתעלם מהאיום</b> על ${HED[reply.captured]} ב-${sqh(reply.to)}. היריב פשוט לוקח: ${san(reply.san)}.`); tags.add('ignoredThreat'); }
+          else { out.push(`המהלך משאיר את ${HED[reply.captured]} ב-${sqh(reply.to)} <b>${gv(reply.captured,'תלוי','תלויה')}</b> (בלי הגנה מספקת): ${san(reply.san)}.`); tags.add('hanging'); }
+        } else if(reply.captured){ out.push(`התגובה החזקה של היריב: ${san(reply.san)}, שלוקח את ${HED[reply.captured]}.`); }
+        const ft=forkTargets(bR, reply.to);
+        if(ft.length){ out.push(`היריב עונה ${san(reply.san)} ועושה <b>מזלג</b> על ${ft.map(s=>HED[bR[s].type]+' ב-'+sqh(s)).join(' ועל ')}.`); tags.add('allowedFork'); }
+        const pins = pinsBy(bR, opp).filter(p=>p.pinner===reply.to);
+        if(pins.length){ const p=pins[0]; out.push(`היריב עונה ${san(reply.san)} ויוצר <b>הצמדה</b> על ${HED[bR[p.pinned].type]} ב-${sqh(p.pinned)}, מול ${HED[bR[p.behind].type]}.`); tags.add('allowedPin'); }
+        if(!reply.captured && !ft.length && !pins.length && !(lA.mate>0)) { out.push(`${reply.san.includes('+')?'היריב עונה <b>בשח</b> ומרוויח זמן: ':'התגובה הטובה ביותר של היריב: '}${pvText(mv.fenAfter, lA.pv, 4)}`); }
+      }
+    }
+    // material comparison
+    const sign = mover==='w'?1:-1;
+    const matBest = sign*materialAfterLine(mv.fenBefore, lB.pv);
+    const matPlayed = sign*materialAfterLine(mv.fenAfter, lA.pv);
+    const diff = matBest - matPlayed;
+    if(diff >= 2 && !(lA.mate>0)){
+      const eq = diff>=8?'בערך מלכה':diff>=5?'בערך צריח':diff>=3?'בערך כלי קל':diff+' רגלים';
+      out.push(`בהשוואה למהלך הטוב ביותר, המהלך הזה עולה <b>${diff} נקודות חומר</b> (${eq}).`); tags.add('lostMaterial');
+    }
+    const tactical = [...tags].some(t=>t!=='didFork');
+    if(res.cls==='miss') out.push('היריב נתן הזדמנות, והיא לא נוצלה. כדאי תמיד לשאול אחרי טעות של היריב: "מה הוא השאיר לא מוגן? יש שח, לקיחה או איום חזק?"');
+    if(!tactical) out.push(`אין כאן טקטיקה מיידית, אבל העמדה נחלשת: לפי המנוע, ההערכה מנקודת המבט של ${mover==='w'?'הלבן':'השחור'} ירדה מ־${san(povText(lB,1))} ל־${san(povText(lA,-1))}. ${san(best.san)} שומר על עמדה טובה יותר.`);
+  }
+  return {html: out, tags:[...tags]};
+}
+
+/* ================= Review state & UI ================= */
+const R = { game:null, an:[], res:[], exp:[], cur:0, flip:false, token:0, analyzing:false, userColor:null, opening:null, bookLen:0 };
+let coach=null, board=null;
+
+function userColorFor(headers){
+  const names=[LS.get('chesscom_user','Nibl82'), LS.get('lichess_user','Igalyuze23')].map(s=>s.toLowerCase());
+  if(names.includes((headers.White||'').toLowerCase())) return 'w';
+  if(names.includes((headers.Black||'').toLowerCase())) return 'b';
+  return null;
+}
+
+async function startReview(pgn){
+  let g; try{ g=gameFromPgn(pgn); }catch(e){ $('#importMsg').innerHTML='<span style="color:#ff8a87">'+esc(e.message)+'</span>'; return; }
+  if(coach) coach.cancel(); stopAuto();
+  const token=++R.token;
+  Object.assign(R, {game:g, an:new Array(g.fens.length).fill(null), res:[], exp:[], cur:0, analyzing:true});
+  R.userColor = userColorFor(g.headers);
+  R.flip = R.userColor==='b';
+  const op = detectOpening(g.moves.map(m=>m.san));
+  R.opening = op; R.bookLen = op ? op.moves.length : 0;
+  ['#explainCard','#graphCard','#progressCard'].forEach(s=>$(s).classList.remove('hidden')); document.body.classList.add('has-game');
+  $('#summaryCard').classList.add('hidden');
+  $('#openingName').innerHTML = op ? `📖 ${op.he} <span class="muted">(${op.en})</span>` : (g.headers.Opening ? '📖 '+esc(g.headers.Opening) : '');
+  renderMoves(); renderReview();
+  const depth=+$('#depthSel').value; const N=g.fens.length; const t0=performance.now();
+  for(let i=0;i<N;i++){
+    if(token!==R.token) return;
+    const fen=g.fens[i];
+    let an = terminalInfo(fen);
+    if(!an){ an = await coach.search(fen, {depth, multipv:2}); }
+    if(token!==R.token || !an) return;
+    R.an[i]=an;
+    if(i>0) computeMove(i-1);
+    const pct=Math.round((i+1)/N*100); $('#progressBar').style.width=pct+'%';
+    const el=(performance.now()-t0)/1000, eta=Math.round(el/(i+1)*(N-i-1));
+    $('#progressText').textContent=`מנתח… ${i+1}/${N} עמדות · נותרו כ-${eta} שניות`;
+    if(i % 2===1 || i===N-1){ renderMoves(); renderGraph(); if(R.cur===i || R.cur===i+1 || R.cur===0) renderReview(); }
+  }
+  R.analyzing=false; $('#progressCard').classList.add('hidden');
+  renderMoves(); renderGraph(); renderSummary(); renderReview();
+  document.body.dataset.analysis='done';
+}
+function computeMove(k){
+  const mv=R.game.moves[k];
+  const prev = k>0 && R.res[k-1] ? R.res[k-1].cls : null;
+  const res = classify(mv, R.an[k], R.an[k+1], k, R.bookLen, prev, k>0?R.game.moves[k-1]:null);
+  res.phase = phaseOf(mv.fenBefore, k);
+  R.res[k]=res; R.exp[k]=explainMove(mv, R.an[k], R.an[k+1], res, R.opening);
+}
+function goto(i, fromAuto){ if(!R.game) return; if(!fromAuto) stopAuto(); const prev=R.cur; R.cur=Math.max(0, Math.min(R.game.fens.length-1, i)); renderReview(); if(!fromAuto && R.cur!==prev) narrateReview(R.cur); }
+
+function playerLabel(color){
+  const h=R.game?R.game.headers:{}; const name = color==='w'?(h.White||'לבן'):(h.Black||'שחור'); const elo = color==='w'?h.WhiteElo:h.BlackElo;
+  const you = R.userColor===color ? ' <span class="tag">אתה</span>':'';
+  return `<span class="sw" style="background:${color==='w'?'#fff':'#222'}"></span><b style="direction:ltr">${esc(name)}</b>${elo?` <span class="muted">(${esc(elo)})</span>`:''}${you}`;
+}
+function renderReview(){
+  if(currentTab!=='review') return;
+  const g=R.game; if(!g){ board.set({fen:new Chess().fen(), hl:[], arrows:[], badge:null, flip:R.flip}); setEvalBar(50,'0.0',R.flip); return; }
+  const i=R.cur; const fen=g.fens[i];
+  const mv=i>0?g.moves[i-1]:null; const res=i>0?R.res[i-1]:null;
+  const arrows=[];
+  if(mv && res && !res.isBest && res.cls!=='book'){ const bu=R.an[i-1].lines[0].pv[0]; if(bu) arrows.push({from:bu.slice(0,2), to:bu.slice(2,4), color:'#81b64c'}); }
+  else if(R.an[i] && R.an[i].lines[0].pv && R.an[i].lines[0].pv[0] && i<g.fens.length-1){ const bu=R.an[i].lines[0].pv[0]; arrows.push({from:bu.slice(0,2), to:bu.slice(2,4), color:'#4aa3ff', w:12, op:.6}); }
+  const c=new Chess(fen); let chk=null; if(c.in_check()){ const b=parseFen(fen); chk=Object.keys(b).find(s=>b[s].type==='k'&&b[s].color===c.turn()); }
+  board.set({fen, flip:R.flip, hl: mv?[mv.from,mv.to]:[], arrows, check:chk, badge: res?{sq:mv.to, sym:CLS[res.cls].sym, color:CLS[res.cls].hex}:null});
+  const an=R.an[i]; if(an) setEvalBar(wpWhite(an), shortEval(an.lines[0], an.stm), R.flip); 
+  $('#topPlayer').innerHTML=playerLabel(R.flip?'w':'b'); $('#botPlayer').innerHTML=playerLabel(R.flip?'b':'w');
+  // explanation
+  const box=$('#explainBox');
+  if(!mv){ box.innerHTML = `<div class="head">♟️ עמדת הפתיחה</div><div class="muted">השתמש בחצים ← → או לחץ על מהלך כדי לעבור על המשחק. ${R.analyzing?'הניתוח רץ ברקע…':'הסיכום המלא נמצא למטה.'}</div>`; }
+  else if(!res){ box.innerHTML = `<div class="head">${san(moveNo(i-1)+mv.san)}</div><div class="muted">מנתח את המהלך הזה…</div>`; }
+  else {
+    const e=R.exp[i-1]; const anB=R.an[i-1], anA=R.an[i];
+    box.innerHTML = `<div class="head">${ci(res.cls)}<span>${san(moveNo(i-1)+mv.san)} – ${CLS[res.cls].he}</span></div>
+      <ul>${e.html.map(x=>`<li>${x}</li>`).join('')}</ul>
+      <div class="evalline">הערכה: ${san(evalText(anB.lines[0], anB.stm))} ← לפני · אחרי → ${san(evalText(anA.lines[0], anA.stm))} · דיוק המהלך: ${Math.round(res.acc)}%</div>`;
+  }
+  $$('.mv').forEach(el=>el.classList.toggle('cur', +el.dataset.ply===i));
+  const cur=$('.mv.cur'); if(cur){ const box2=$('#movesBox'); const r1=cur.getBoundingClientRect(), r2=box2.getBoundingClientRect(); if(r1.top<r2.top||r1.bottom>r2.bottom) box2.scrollTop += r1.top-r2.top-box2.clientHeight/2; }
+  renderGraphCursor();
+}
+function moveNo(k){ return Math.floor(k/2)+1 + (k%2===0?'. ':'... '); }
+function renderMoves(){
+  const g=R.game; if(!g) return; let h='<table>';
+  for(let k=0;k<g.moves.length;k+=2){
+    const cell=j=>{ if(j>=g.moves.length) return '<td></td>'; const r=R.res[j]; return `<td><span class="mv" data-ply="${j+1}">${r?ci(r.cls):''}${g.moves[j].san}</span></td>`; };
+    h+=`<tr><td class="no">${k/2+1}.</td>${cell(k)}${cell(k+1)}</tr>`;
+  }
+  $('#movesBox').innerHTML=h+'</table>';
+  $$('#movesBox .mv').forEach(el=>el.onclick=()=>goto(+el.dataset.ply));
+  $$('.mv').forEach(el=>el.classList.toggle('cur', +el.dataset.ply===R.cur));
+}
+function renderGraph(){
+  const g=R.game; if(!g) return; const N=g.fens.length; const W=1000,H=100;
+  const pts=[]; for(let i=0;i<N;i++){ if(!R.an[i]) break; pts.push([N>1? i/(N-1)*W : 0, H - wpWhite(R.an[i])/100*H]); }
+  let s=`<rect x="0" y="0" width="${W}" height="${H}" fill="#3a3834"/><line x1="0" y1="50" x2="${W}" y2="50" stroke="#ffffff30" stroke-width="1" vector-effect="non-scaling-stroke"/>`;
+  if(pts.length){ s+=`<path d="M0,${H} L${pts.map(p=>p.join(',')).join(' L')} L${pts[pts.length-1][0]},${H} Z" fill="#f2f2f2"/>`; }
+  R.res.forEach((r,k)=>{ if(!r || !['blunder','mistake','miss','brilliant','great'].includes(r.cls)) return; const x=(k+1)/(N-1)*W; const y=H-wpWhite(R.an[k+1])/100*H; s+=`<circle cx="${x}" cy="${y}" r="4.5" fill="${CLS[r.cls].hex}" stroke="#000" stroke-width="1" vector-effect="non-scaling-stroke"/>`; });
+  s+=`<line id="gcur" x1="0" y1="0" x2="0" y2="${H}" stroke="#81b64c" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
+  $('#graph').innerHTML=s; renderGraphCursor();
+}
+function renderGraphCursor(){ const l=$('#gcur'); if(!l||!R.game) return; const N=R.game.fens.length; const x=N>1?R.cur/(N-1)*1000:0; l.setAttribute('x1',x); l.setAttribute('x2',x); }
+
+const PRACTICE = {
+  hanging:['בדיקת "כלים תלויים" לפני כל מהלך','לפני שאתה לוחץ: איזה כלי שלי לא מוגן? מה היריב יכול לאכול אחרי המהלך?'],
+  ignoredThreat:['לשים לב לאיומים של היריב','אחרי כל מהלך של היריב, שאל: "מה הוא מאיים לעשות עכשיו?"'],
+  allowedFork:['טקטיקה: מזלגות','פתור פאזלים בנושא Fork (מזלג), במיוחד מזלגות של פרש.'],
+  missedFork:['טקטיקה: מזלגות','פתור פאזלים בנושא Fork (מזלג), במיוחד מזלגות של פרש.'],
+  allowedPin:['טקטיקה: הצמדות','פאזלים בנושא Pin, ושים לב לכלים שעומדים על אותו קו עם המלך או המלכה.'],
+  missedCapture:['לחפש לקיחות חינמיות','בכל מהלך עבור על "שחים, לקיחות, איומים" (Checks, Captures, Threats).'],
+  missedMate:['תרגילי מט','פתור פאזלים של מט ב-1 עד מט ב-3 כל יום.'],
+  allowedMate:['בטיחות המלך','שים לב לשורה האחורית ולכלים שתוקפים את המלך שלך.'],
+  lostMaterial:['חישוב חילופים','ספור תוקפים ומגינים לפני חילוף, ותבדוק מה נשאר בסוף.'],
+};
+function renderSummary(){
+  const g=R.game; if(!g) return; const box=$('#summaryBox');
+  const sides=['w','b']; const stats={};
+  for(const c of sides){ const idx=g.moves.map((m,k)=>k).filter(k=>g.moves[k].color===c && R.res[k]);
+    const accs=idx.map(k=>R.res[k].acc); const mean=accs.reduce((a,b)=>a+b,0)/(accs.length||1); const harm=accs.length/accs.reduce((a,b)=>a+1/Math.max(5,b),0);
+    const counts={}; CLS_ORDER.forEach(k=>counts[k]=0); idx.forEach(k=>counts[R.res[k].cls]++);
+    stats[c]={acc: accs.length ? (mean+harm)/2 : 0, counts, idx}; }
+  const h=g.headers; const nm=c=>esc(c==='w'?(h.White||'לבן'):(h.Black||'שחור'));
+  let s=`<div class="acc">${sides.map(c=>`<div class="accbox ${c==='w'?'white':'black'}"><div class="who">${c==='w'?'⚪':'⚫'} <bdi>${nm(c)}</bdi>${R.userColor===c?' (אתה)':''}</div><div class="n">${stats[c].acc.toFixed(1)}</div><div class="who">דיוק</div></div>`).join('')}</div>`;
+  s+=`<table class="counts"><tr><td></td><td class="num">⚪</td><td class="num">⚫</td></tr>${CLS_ORDER.map(k=>`<tr><td>${ci(k)} ${CLS[k].he}</td><td class="num">${stats.w.counts[k]}</td><td class="num">${stats.b.counts[k]}</td></tr>`).join('')}</table>`;
+  const focus = R.userColor || null;
+  const pool = g.moves.map((m,k)=>k).filter(k=>R.res[k] && (!focus || g.moves[k].color===focus));
+  const key = pool.filter(k=>['blunder','mistake','miss'].includes(R.res[k].cls)).sort((a,b)=>R.res[b].loss-R.res[a].loss).slice(0,4);
+  const good = pool.filter(k=>['brilliant','great'].includes(R.res[k].cls)).slice(0,3);
+  s+=`<h3 style="margin-top:16px">🔑 רגעי מפתח${focus?' שלך':''}</h3>`;
+  if(!key.length) s+='<div class="muted">לא היו טעויות משמעותיות. משחק נקי מאוד! 👏</div>';
+  key.forEach(k=>{ const r=R.res[k], m=g.moves[k]; const first=R.exp[k].html.find(x=>x.includes('המהלך הטוב יותר'))||'';
+    s+=`<div class="moment" data-ply="${k+1}">${ci(r.cls)} ${san(moveNo(k)+m.san)} – ${CLS[r.cls].he} <span class="muted small">(${r.phase==='opening'?'פתיחה':r.phase==='endgame'?'סיום':'אמצע המשחק'}, ירידה של ${Math.round(r.loss)}% בסיכויי הניצחון)</span><div class="small">${first}</div></div>`; });
+  good.forEach(k=>{ const r=R.res[k], m=g.moves[k]; s+=`<div class="moment" data-ply="${k+1}">${ci(r.cls)} ${san(moveNo(k)+m.san)} – ${CLS[r.cls].he} 👏</div>`; });
+  // practice
+  const tagCount={}; pool.forEach(k=>{ if(['inaccuracy','mistake','blunder','miss'].includes(R.res[k].cls)) R.exp[k].tags.forEach(t=>tagCount[t]=(tagCount[t]||0)+1); });
+  const phaseCount={opening:0,middlegame:0,endgame:0}; pool.forEach(k=>{ if(['mistake','blunder','miss'].includes(R.res[k].cls)) phaseCount[R.res[k].phase]++; });
+  const tips=[]; const seen=new Set();
+  Object.entries(tagCount).sort((a,b)=>b[1]-a[1]).forEach(([t])=>{ const p=PRACTICE[t]; if(p && !seen.has(p[0])){ seen.add(p[0]); tips.push(p); } });
+  if(phaseCount.opening>=1) tips.push(['הפתיחה',`רוב הנזק התחיל מוקדם. ${R.opening?`כדאי ללמוד את הרעיונות של <b>${R.opening.he}</b>.`:'כדאי ללמוד 1–2 פתיחות קבועות לעומק.'}`]);
+  if(phaseCount.endgame>=1) tips.push(['סיומים','תרגל סיומים בסיסיים: מלך ורגלי, צריחים, והפעלת המלך בסוף המשחק.']);
+  if(!tips.length) tips.push(['להמשיך כך','שחק משחקים ארוכים יותר (10+ דקות) ונתח כל הפסד.']);
+  s+=`<h3 style="margin-top:16px">🏋️ מה לתרגל</h3><ul>${tips.slice(0,4).map(t=>`<li><b>${t[0]}:</b> ${t[1]}</li>`).join('')}</ul>`;
+  const st = focus ? stats[focus] : null;
+  if(st){ const bad=st.counts.blunder+st.counts.mistake+st.counts.miss; s+=`<div class="muted small" style="margin-top:8px">בשורה התחתונה: דיוק של ${st.acc.toFixed(1)}%, ${st.counts.blunder} טעויות גסות, ${st.counts.mistake} טעויות ו-${st.counts.miss} החמצות. ${bad===0?'משחק מצוין!':'כל טעות גסה שנחסכת שווה הרבה נקודות דירוג.'}</div>`; }
+  box.innerHTML=s; $('#summaryCard').classList.remove('hidden');
+  $$('#summaryBox .moment').forEach(el=>el.onclick=()=>{ goto(+el.dataset.ply); window.scrollTo({top:0,behavior:'smooth'}); });
+}
+
+/* ================= Import ================= */
+let src='chesscom';
+function setSrc(s){
+  src=s; $$('#srcSeg button').forEach(b=>b.classList.toggle('on', b.dataset.src===s));
+  $('#srcUser').classList.toggle('hidden', s==='pgn'); $('#srcPgn').classList.toggle('hidden', s!=='pgn');
+  if(s==='chesscom') $('#userInput').value=LS.get('chesscom_user','Nibl82');
+  if(s==='lichess') $('#userInput').value=LS.get('lichess_user','Igalyuze23');
+  $('#gamesList').classList.add('hidden'); $('#importMsg').textContent='';
+}
+function resultFor(g, user){
+  const u=user.toLowerCase(); const w=(g.white||'').toLowerCase()===u; const b=(g.black||'').toLowerCase()===u;
+  if(g.result==='1/2-1/2') return ['draw','תיקו']; if(!w&&!b) return ['draw', g.result];
+  const won = (g.result==='1-0'&&w)||(g.result==='0-1'&&b); return won?['win','ניצחון']:['loss','הפסד'];
+}
+const TC_HE={bullet:'בולט',blitz:'בליץ',rapid:'רפיד',classical:'קלאסי',daily:'יומי',correspondence:'התכתבות',ultraBullet:'אולטרה-בולט'};
+async function fetchGames(){
+  const user=$('#userInput').value.trim(); if(!user){ $('#importMsg').textContent='הכנס שם משתמש'; return; }
+  LS.set(src==='chesscom'?'chesscom_user':'lichess_user', user);
+  $('#importMsg').textContent='מביא משחקים…'; $('#gamesList').classList.add('hidden');
+  let games=[];
+  try{
+    if(src==='chesscom'){
+      const r=await fetch(`https://api.chess.com/pub/player/${encodeURIComponent(user.toLowerCase())}/games/archives`);
+      if(r.status===404||r.status===410) throw new Error('המשתמש לא נמצא ב-Chess.com'); if(!r.ok) throw new Error('שגיאה מ-Chess.com ('+r.status+')');
+      const arch=(await r.json()).archives||[]; if(!arch.length) throw new Error('אין משחקים למשתמש הזה');
+      for(let i=arch.length-1;i>=0 && games.length<25 && i>=arch.length-4;i--){
+        const rr=await fetch(arch[i]); if(!rr.ok) continue; const js=await rr.json();
+        (js.games||[]).filter(x=>x.rules==='chess' && x.pgn).forEach(x=>{ const hd=cleanPgn(x.pgn).headers;
+          games.push({white:x.white.username, black:x.black.username, we:x.white.rating, be:x.black.rating, result:hd.Result||'*', end:x.end_time*1000, tc:TC_HE[x.time_class]||x.time_class, pgn:x.pgn, url:x.url}); });
+      }
+      games.sort((a,b)=>b.end-a.end);
+    } else {
+      const r=await fetch(`https://lichess.org/api/games/user/${encodeURIComponent(user)}?max=25&pgnInJson=true&opening=true&clocks=false&evals=false`, {headers:{Accept:'application/x-ndjson'}});
+      if(r.status===404){ const u=await fetch(`https://lichess.org/api/user/${encodeURIComponent(user)}`).catch(()=>null); if(u && u.ok){ const uj=await u.json(); if(uj.disabled) throw new Error('החשבון סגור ב-Lichess'); throw new Error('Lichess לא החזיר משחקים כרגע (ייתכן חסימה זמנית). נסה שוב בעוד דקה, או הדבק PGN.'); } throw new Error('המשתמש לא נמצא ב-Lichess'); } if(!r.ok) throw new Error('שגיאה מ-Lichess ('+r.status+')');
+      const txt=await r.text();
+      txt.split('\n').filter(Boolean).forEach(line=>{ const x=JSON.parse(line); if(x.variant!=='standard' && x.variant!=='fromPosition') return; if(!x.moves) return;
+        const res = x.winner==='white'?'1-0':x.winner==='black'?'0-1':(x.status==='started'?'*':'1/2-1/2');
+        games.push({white:x.players.white.user?x.players.white.user.name:(x.players.white.aiLevel?'Stockfish '+x.players.white.aiLevel:'אנונימי'), black:x.players.black.user?x.players.black.user.name:(x.players.black.aiLevel?'Stockfish '+x.players.black.aiLevel:'אנונימי'), we:x.players.white.rating, be:x.players.black.rating, result:res, end:x.lastMoveAt||x.createdAt, tc:TC_HE[x.speed]||x.speed, pgn:x.pgn, url:'https://lichess.org/'+x.id, opening:x.opening&&x.opening.name}); });
+    }
+  }catch(e){ $('#importMsg').innerHTML='<span style="color:#ff8a87">'+esc(e.message||'שגיאת רשת')+'</span>'; return; }
+  games=games.filter(g=>g.pgn && /\d\.\s*\S/.test(cleanPgn(g.pgn).movetext));
+  if(!games.length){ $('#importMsg').textContent='לא נמצאו משחקים רגילים להצגה.'; return; }
+  window.__games=games;
+  $('#importMsg').textContent=`נמצאו ${games.length} משחקים אחרונים. בחר משחק לניתוח:`;
+  const list=$('#gamesList'); list.innerHTML=games.slice(0,25).map((g,i)=>{ const [rc,rt]=resultFor(g,user); const d=new Date(g.end);
+    return `<div class="game" data-i="${i}"><div><div class="who"><bdi>${esc(g.white)}</bdi> <span class="muted small">${g.we||''}</span> – <bdi>${esc(g.black)}</bdi> <span class="muted small">${g.be||''}</span></div><div class="meta">${esc(g.tc||'')} · ${d.toLocaleDateString('he-IL')} ${d.toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})}${g.opening?' · <bdi>'+esc(g.opening)+'</bdi>':''}</div></div><span class="res ${rc}">${rt}</span></div>`; }).join('');
+  list.classList.remove('hidden');
+  $$('#gamesList .game').forEach(el=>el.onclick=()=>{ $$('#gamesList .game').forEach(x=>x.style.background=''); el.style.background='#81b64c22'; startReview(games[+el.dataset.i].pgn); if(innerWidth<900) window.scrollTo({top:0,behavior:'smooth'}); });
+}
+const SAMPLE_PGN = `[Event "Paris Opera"]
+[Site "Paris"]
+[Date "1858.??.??"]
+[White "Paul Morphy"]
+[Black "Duke Karl / Count Isouard"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 d6 3. d4 Bg4 4. dxe5 Bxf3 5. Qxf3 dxe5 6. Bc4 Nf6 7. Qb3 Qe7 8. Nc3 c6 9. Bg5 b5 10. Nxb5 cxb5 11. Bxb5+ Nbd7 12. O-O-O Rd8 13. Rxd7 Rxd7 14. Rd1 Qe6 15. Bxd7+ Nxd7 16. Qb8+ Nxb8 17. Rd8# 1-0`;
+
+/* ================= Narrator (Web Speech API, Hebrew) ================= */
+const NAR = { on: LS.get('tts','0')==='1', rate: +LS.get('ttsrate','1'), voice:null, voicesLoaded:false, auto:false, autoTok:0, log:[] };
+window.__ttsLog = NAR.log;
+const SP_PIECE={K:'מלך',Q:'מלכה',R:'צריח',B:'רץ',N:'פרש'};
+const SP_FILE={a:'איי',b:'בי',c:'סי',d:'די',e:'אי',f:'אף',g:"ג'י",h:"אייץ'"};
+const SAN_RE=/^(O-O(-O)?|[KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](=[QRBN])?)[+#]?$/;
+const spSq = s => SP_FILE[s[0]]+' '+s[1];
+function spSan(x){
+  x=(x||'').trim(); let base;
+  if(/^O-O-O/.test(x)) base='הצרחה ארוכה';
+  else if(/^O-O/.test(x)) base='הצרחה קצרה';
+  else { const m=x.match(/^([KQRBN])?([a-h])?([1-8])?(x)?([a-h][1-8])(=([QRBN]))?/); if(!m) return x;
+    const piece=m[1]?SP_PIECE[m[1]]:'רגלי'; const take = m[1]==='Q' ? ' לוקחת ב־' : ' לוקח ב־';
+    base = piece + (m[4] ? take : ' ל־') + spSq(m[5]); if(m[7]) base+=', והכתרה ל'+SP_PIECE[m[7]]; }
+  if(x.endsWith('#')) base+=', מט!'; else if(x.endsWith('+')) base+=', שח';
+  return base;
+}
+function speakHtml(h){
+  let s=String(h).split('המשך אפשרי')[0];
+  if(s.startsWith('אין כאן טקטיקה מיידית')) return 'אין כאן טקטיקה מיידית, אבל העמדה נחלשת.';
+  s=s.replace(/<bdi class="san sq">([^<]*)<\/bdi>/g,(m,x)=>spSq(x.trim()))
+     .replace(/<bdi class="san">([^<]*)<\/bdi>/g,(m,x)=>SAN_RE.test(x.trim())?spSan(x):'')
+     .replace(/<[^>]+>/g,'').replace(/[⚠️💡]/gu,'').replace(/\s+/g,' ').trim();
+  if(/:\s*\.?$/.test(s)) return '';
+  return s.replace(/\s*\.\s*$/,'.');
+}
+function shortSpoken(exp, cls){
+  if(!exp) return '';
+  const bad=['inaccuracy','mistake','blunder','miss'].includes(cls);
+  let items=exp.html.map(speakHtml).filter(Boolean);
+  if(bad){ items=items.filter(s=>!/^המהלך לוקח את|^נוצרת הצמדה|^המהלך נותן שח/.test(s)); items.sort((a,b)=>(/^המהלך הטוב יותר/.test(b)?1:0)-(/^המהלך הטוב יותר/.test(a)?1:0)); return items.slice(0,3).join(' '); }
+  if(cls==='book') return '';
+  if(cls==='best') return items.filter(s=>!/^זה המהלך הטוב ביותר/.test(s)).slice(0,1).join(' ');
+  return items.slice(0,1).join(' ');
+}
+const spLabel = k => k==='book' ? 'מהלך תיאוריה' : CLS[k].he;
+const endDot = t => /[.!?]$/.test(t) ? t : t+'.';
+function pickVoice(){
+  if(!('speechSynthesis' in window)) return;
+  const vs=speechSynthesis.getVoices(); if(vs.length) NAR.voicesLoaded=true;
+  NAR.voice = vs.find(v=>/^(he|iw)/i.test(v.lang) && /natural|online/i.test(v.name)) || vs.find(v=>/^(he|iw)/i.test(v.lang)) || null;
+  updateTtsUi();
+}
+function updateTtsUi(){
+  const b=$('#ttsBtn'); if(!b) return;
+  b.textContent = NAR.on ? '🔊 קריין' : '🔇 קריין'; b.classList.toggle('on', NAR.on);
+  $('#ttsRate').value=String(NAR.rate);
+  const note=$('#ttsNote');
+  if(!('speechSynthesis' in window)){ note.innerHTML='הדפדפן הזה לא תומך בהקראה. נסה Chrome או Edge.'; note.classList.toggle('hidden', !NAR.on); return; }
+  if(NAR.on && !NAR.voice){
+    note.innerHTML = `⚠️ לא נמצא קול עברי במחשב, אז ההקראה תשתמש בקול ברירת המחדל (ייתכן שלא יבטא עברית טוב).<br>
+      <b>להוספת קול עברי ב-Windows:</b> הגדרות ← זמן ושפה ← דיבור ← "ניהול קולות" ← הוספת קולות ← בחר <b>עברית</b> (Microsoft Asaf) ← התקן, ואז סגור ופתח מחדש את הדפדפן.<br>
+      <span class="muted">טיפ: בדפדפן Edge יש קולות עבריים טבעיים מובנים (Avri / Hila) בלי התקנה.</span>`;
+    note.classList.remove('hidden');
+  } else note.classList.add('hidden');
+  $('#autoBtn').textContent = NAR.auto ? '⏸ עצור' : '▶ ניגון אוטומטי';
+}
+function say(text, {interrupt=true}={}){
+  text=(text||'').trim(); if(!NAR.on || !text) return Promise.resolve();
+  NAR.log.push(text); if(NAR.log.length>200) NAR.log.shift();
+  if(!('speechSynthesis' in window)) return Promise.resolve();
+  if(interrupt) speechSynthesis.cancel();
+  return new Promise(res=>{
+    const u=new SpeechSynthesisUtterance(text); u.lang='he-IL'; if(NAR.voice) u.voice=NAR.voice; u.rate=NAR.rate;
+    let done=false; const fin=()=>{ if(!done){ done=true; res(); } };
+    u.onend=fin; u.onerror=fin;
+    // safety net: some browsers/headless never fire onend
+    setTimeout(fin, Math.max(1500, text.length*95/NAR.rate) + 1500);
+    speechSynthesis.speak(u);
+  });
+}
+function reviewSpeech(i){
+  const g=R.game; if(!g) return '';
+  if(i===0) return 'עמדת הפתיחה.';
+  const mv=g.moves[i-1], res=R.res[i-1];
+  const who = mv.color==='w' ? 'לבן' : 'שחור';
+  let t = endDot(`מהלך ${Math.floor((i-1)/2)+1}, ${who}: ${spSan(mv.san)}`);
+  if(res){ t += ` ${spLabel(res.cls)}.`; const sh=shortSpoken(R.exp[i-1], res.cls); if(sh) t+=' '+sh; }
+  return t;
+}
+function narrateReview(i){ if(NAR.on) say(reviewSpeech(i)); }
+function stopAuto(){ if(NAR.auto){ NAR.auto=false; NAR.autoTok++; updateTtsUi(); } }
+async function autoplay(){
+  if(NAR.auto){ stopAuto(); if('speechSynthesis' in window) speechSynthesis.cancel(); return; }
+  if(!R.game){ toast('קודם טען משחק לניתוח'); return; }
+  NAR.auto=true; const tok=++NAR.autoTok; updateTtsUi();
+  if(R.cur>=R.game.fens.length-1) R.cur=0;
+  while(NAR.auto && tok===NAR.autoTok && R.cur < R.game.fens.length-1){
+    goto(R.cur+1, true);
+    if(NAR.on) await say(reviewSpeech(R.cur)); else await new Promise(r=>setTimeout(r, 1400/NAR.rate));
+    await new Promise(r=>setTimeout(r, 450));
+  }
+  if(tok===NAR.autoTok){ NAR.auto=false; updateTtsUi(); }
+}
+function initNarrator(){
+  if('speechSynthesis' in window){ pickVoice(); speechSynthesis.onvoiceschanged=pickVoice; setTimeout(pickVoice, 1200); }
+  $('#ttsBtn').onclick=()=>{ NAR.on=!NAR.on; LS.set('tts', NAR.on?'1':'0'); if(!NAR.on && 'speechSynthesis' in window) speechSynthesis.cancel(); updateTtsUi(); if(NAR.on) say(NAR.voice?'הקריין הופעל.':'הקריין הופעל.'); };
+  $('#ttsRate').onchange=e=>{ NAR.rate=+e.target.value; LS.set('ttsrate', NAR.rate); say('זו המהירות החדשה.'); };
+  $('#autoBtn').onclick=autoplay;
+  updateTtsUi();
+}
+
+/* ================= Play vs coach ================= */
+const LEVELS=[
+  {skill:0, depth:1, mt:60, elo:'~400'},{skill:2, depth:2, mt:100, elo:'~700'},{skill:5, depth:4, mt:200, elo:'~1000'},{skill:8, depth:6, mt:300, elo:'~1300'},
+  {skill:11, depth:8, mt:400, elo:'~1600'},{skill:14, depth:10, mt:600, elo:'~1900'},{skill:17, depth:12, mt:800, elo:'~2200'},{skill:20, depth:16, mt:1200, elo:'2700+'},
+];
+const P={ chess:new Chess(), userColor:'w', level:+LS.get('level','3'), thinking:false, lastEval:null, hintStage:0, hintMove:null, flip:false, lastUser:null, history:[], over:false };
+let opponent=null;
+function getOpp(){ if(!opponent) opponent=new Engine('opp'); return opponent; }
+
+function renderLevels(){
+  $('#levels').innerHTML=LEVELS.map((l,i)=>`<button data-l="${i}" class="${i===P.level?'on':''}">רמה ${i+1}<small><bdi dir="ltr">${l.elo}</bdi></small></button>`).join('');
+  $$('#levels button').forEach(b=>b.onclick=()=>{ P.level=+b.dataset.l; LS.set('level',P.level); renderLevels(); });
+}
+function coachSay(html){ $('#coachMsg').innerHTML=html; }
+function renderPlay(){
+  if(currentTab!=='play') return;
+  const c=P.chess; const fen=c.fen(); const h=c.history({verbose:true}); const last=h[h.length-1];
+  let chk=null; if(c.in_check()){ const b=parseFen(fen); chk=Object.keys(b).find(s=>b[s].type==='k'&&b[s].color===c.turn()); }
+  const arrows=[]; if(P.hintStage===2 && P.hintMove) arrows.push({from:P.hintMove.slice(0,2), to:P.hintMove.slice(2,4), color:'#4aa3ff'});
+  const ul=P.lastUser; const badge = ul && ul.res && h.length && (h.length===ul.ply+1 || h.length===ul.ply+2) ? {sq:ul.mv.to, sym:CLS[ul.res.cls].sym, color:CLS[ul.res.cls].hex} : null;
+  board.set({fen, flip:P.flip, hl: last?[last.from,last.to]:[], arrows, check:chk, badge, hint: P.hintStage===1&&P.hintMove?P.hintMove.slice(0,2):null});
+  if(P.lastEval) setEvalBar(P.lastEval.wp, P.lastEval.txt, P.flip); else setEvalBar(50,'0.0',P.flip);
+  const lvl=LEVELS[P.level];
+  const me=`<span class="sw" style="background:${P.userColor==='w'?'#fff':'#222'}"></span><b>אתה</b>`;
+  const bot=`<span class="sw" style="background:${P.userColor==='w'?'#222':'#fff'}"></span><b>המאמן</b> <span class="muted">(רמה ${P.level+1}, <bdi dir="ltr">${lvl.elo}</bdi>)</span>${P.thinking?' <span class="muted small">חושב…</span>':''}`;
+  const userBottom = (P.userColor==='w') !== P.flip;
+  $('#topPlayer').innerHTML = userBottom?bot:me; $('#botPlayer').innerHTML = userBottom?me:bot;
+  // move list
+  let t='<table>'; for(let k=0;k<h.length;k+=2){ const cell=j=>{ if(j>=h.length) return '<td></td>'; const r=P.history[j]; return `<td><span class="mv">${r&&r.res?ci(r.res.cls):''}${h[j].san}</span></td>`; }; t+=`<tr><td class="no">${k/2+1}.</td>${cell(k)}${cell(k+1)}</tr>`; }
+  $('#playMoves').innerHTML=t+'</table>'; $('#playMoves').scrollTop=1e6;
+}
+function newPlayGame(){
+  const sel=$('#colorSeg .on').dataset.c; P.userColor = sel==='r' ? (Math.random()<.5?'w':'b') : sel;
+  Object.assign(P,{chess:new Chess(), flip:P.userColor==='b', lastEval:null, hintStage:0, hintMove:null, lastUser:null, history:[], over:false, thinking:false});
+  getOpp().newGame(); coach.cancel();
+  coachSay(`משחק חדש! אתה משחק עם ה${P.userColor==='w'?'לבנים':'שחורים'} ברמה ${P.level+1}. בהצלחה 🙂`);
+  renderPlay(); if(P.userColor!==P.chess.turn()) botMove();
+}
+async function botMove(){
+  if(P.over) return; P.thinking=true; renderPlay(); const lvl=LEVELS[P.level];
+  const fenAtStart=P.chess.fen();
+  const r=await getOpp().search(fenAtStart, {depth:lvl.depth, movetime:lvl.mt, skill:lvl.skill});
+  P.thinking=false;
+  if(!r || P.chess.fen()!==fenAtStart || !r.bestmove || r.bestmove==='(none)') { renderPlay(); return; }
+  const m=mvFromUci(P.chess, r.bestmove); P.history.push({mv:m}); say(endDot('המאמן משחק: '+spSan(m.san)), {interrupt:false});
+  P.hintStage=0; P.hintMove=null; renderPlay(); checkOver();
+}
+function checkOver(){
+  const c=P.chess; if(!c.game_over()) return false; P.over=true;
+  let msg;
+  if(c.in_checkmate()) msg = c.turn()===P.userColor ? 'מט 😔 המאמן ניצח. לחץ על "נתח את המשחק הזה" כדי ללמוד מהטעויות.' : 'מט! 🎉 ניצחת את המאמן! לחץ על "נתח את המשחק הזה" כדי לראות את המהלכים הכי טובים שלך.';
+  else msg='המשחק נגמר בתיקו (פט, חזרה משולשת או חוסר חומר).';
+  coachSay(msg); toast(msg, 5000); say(msg.replace(/[🎉😔]/gu,'').split('לחץ')[0], {interrupt:false}); return true;
+}
+async function userMove(from, to){
+  if(P.over || P.thinking || P.chess.turn()!==P.userColor) return;
+  const fenBefore=P.chess.fen();
+  const m=P.chess.move({from, to, promotion:'q'}); if(!m) return;
+  const mv={san:m.san, uci:m.from+m.to+(m.promotion||''), from:m.from, to:m.to, color:m.color, piece:m.piece, captured:m.captured, flags:m.flags, fenBefore, fenAfter:P.chess.fen()};
+  const entry={mv, ply:P.chess.history().length-1}; P.history.push(entry); P.lastUser=entry; P.hintStage=0; P.hintMove=null;
+  coachSay('<span class="muted">המאמן בודק את המהלך שלך…</span>');
+  renderPlay();
+  const over=checkOver();
+  // evaluate user's move with the coach engine (in parallel with the bot's reply)
+  evaluateUserMove(entry);
+  if(!over) botMove();
+}
+async function evaluateUserMove(entry){
+  const mv=entry.mv; const ply=entry.ply;
+  const anB = terminalInfo(mv.fenBefore) || await coach.search(mv.fenBefore, {depth:12, multipv:2});
+  const anA = terminalInfo(mv.fenAfter) || await coach.search(mv.fenAfter, {depth:12});
+  if(!anB || !anA) return;
+  const sans=P.chess.history(); const op=detectOpening(sans.slice(0,ply+1));
+  const prev = P.history[ply-1];
+  const res=classify(mv, anB, anA, ply, op?op.moves.length:0, prev&&prev.res?prev.res.cls:null, prev?prev.mv:null);
+  entry.res=res; entry.exp=explainMove(mv, anB, anA, res, op); entry.anA=anA; entry.anB=anB;
+  P.lastEval={wp:wpWhite(anA), txt:shortEval(anA.lines[0], anA.stm)};
+  if(P.lastUser===entry){
+    say(`המהלך שלך, ${spSan(mv.san)}: ${spLabel(res.cls)}. ${shortSpoken(entry.exp, res.cls)}`, {interrupt:false});
+    const bad=['inaccuracy','mistake','blunder','miss'].includes(res.cls);
+    if(bad && $('#autoWhy').checked) showWhy(); else if(!P.over) coachSay(`${ci(res.cls)} ${san(mv.san)} – <b>${CLS[res.cls].he}</b>. <span class="muted">לחץ "למה?" להסבר.</span>`);
+  }
+  renderPlay();
+}
+function showWhy(){
+  const e=P.lastUser; if(!e){ coachSay('עוד לא שיחקת מהלך.'); return; }
+  if(!e.res){ coachSay('<span class="muted">המאמן עדיין בודק את המהלך…</span>'); return; }
+  coachSay(`<div class="explain"><div class="head">${ci(e.res.cls)}<span>${san(e.mv.san)} – ${CLS[e.res.cls].he}</span></div><ul>${e.exp.html.map(x=>`<li>${x}</li>`).join('')}</ul><div class="evalline">הערכה אחרי המהלך: ${san(evalText(e.anA.lines[0], e.anA.stm))}</div></div>`);
+}
+async function hint(){
+  if(P.over || P.chess.turn()!==P.userColor){ coachSay('חכה לתורך 🙂'); return; }
+  if(P.hintStage===0 || !P.hintMove){
+    coachSay('<span class="muted">חושב על רמז…</span>'); const fen=P.chess.fen();
+    const r=await coach.search(fen, {depth:12}); if(!r || P.chess.fen()!==fen) return;
+    P.hintMove=r.lines[0].pv[0]; P.hintStage=1;
+    const b=parseFen(fen); const p=b[P.hintMove.slice(0,2)]; const m=uciToMove(fen,P.hintMove);
+    let extra=''; if(r.lines[0].mate>0) extra=` יש כאן <b>מט ב-${r.lines[0].mate}</b>!`; else if(m.captured) extra=' חפש לקיחה.'; else if(m.san.includes('+')) extra=' חפש שח.';
+    coachSay(`💡 רמז: נסה להזיז את ${HED[p.type]} ב-${sqh(P.hintMove.slice(0,2))}.${extra} <span class="muted">(לחץ שוב על רמז כדי לראות את המהלך)</span>`); say(speakHtml(`רמז: נסה להזיז את ${HED[p.type]} ב-${sqh(P.hintMove.slice(0,2))}.${extra}`));
+  } else { P.hintStage=2; const m=uciToMove(P.chess.fen(),P.hintMove); coachSay(`💡 המהלך המומלץ: ${san(m.san)}`); say('המהלך המומלץ: '+spSan(m.san)); }
+  renderPlay();
+}
+function undo(){
+  if(P.thinking) return; coach.cancel();
+  const h=P.chess.history(); if(!h.length) return;
+  P.chess.undo(); P.history.pop(); if(P.chess.turn()!==P.userColor && P.chess.history().length){ P.chess.undo(); P.history.pop(); }
+  P.over=false; P.hintStage=0; P.lastUser=[...P.history].reverse().find(x=>x.mv.color===P.userColor)||null; coachSay('המהלך בוטל. נסה שוב!'); renderPlay();
+  if(P.chess.turn()!==P.userColor) botMove();
+}
+
+/* ================= App init ================= */
+let currentTab='review';
+function setTab(t){
+  currentTab=t; $('#tabReview').classList.toggle('on',t==='review'); $('#tabPlay').classList.toggle('on',t==='play');
+  $('#reviewPanel').classList.toggle('hidden',t!=='review'); $('#playPanel').classList.toggle('hidden',t!=='play');
+  $('#reviewNav').classList.toggle('hidden',t!=='review'); $('#playNav').classList.toggle('hidden',t!=='play');
+  $('#autoBtn').classList.toggle('hidden', t!=='review'); if(t!=='review') stopAuto();
+  board.clearSel(); if(t==='review') renderReview(); else renderPlay();
+}
+function init(){
+  board=new BoardUI($('#board'), {
+    interactive:()=>currentTab==='play' && !P.over && !P.thinking && P.chess.turn()===P.userColor,
+    canPick:c=>c===P.userColor,
+    targets:sq=>P.chess.moves({square:sq, verbose:true}).map(m=>m.to),
+    onMove:(f,t)=>userMove(f,t),
+  });
+  setEngineStatus('טוען מנוע…', false);
+  try{ coach=new Engine('coach'); coach.ready.then(()=>setEngineStatus('Stockfish 19 מוכן', true)); }
+  catch(e){ setEngineStatus('המנוע לא נטען: '+e.message, false); }
+  $('#depthSel').value=LS.get('depth','14'); $('#depthSel').onchange=e=>LS.set('depth',e.target.value);
+  $$('#srcSeg button').forEach(b=>b.onclick=()=>setSrc(b.dataset.src)); setSrc(LS.get('src','chesscom'));
+  $$('#srcSeg button').forEach(b=>b.addEventListener('click',()=>LS.set('src',b.dataset.src)));
+  $('#fetchBtn').onclick=fetchGames; $('#userInput').addEventListener('keydown',e=>{ if(e.key==='Enter') fetchGames(); });
+  $('#pgnBtn').onclick=()=>{ const games=splitPgns($('#pgnInput').value); if(!games.length){ $('#importMsg').textContent='הדבק PGN תקין'; return; } startReview(games[0]); if(games.length>1) toast(`נמצאו ${games.length} משחקים, מנתח את הראשון.`); };
+  $('#sampleBtn').onclick=()=>{ $('#pgnInput').value=SAMPLE_PGN; startReview(SAMPLE_PGN); };
+  $('#stopBtn').onclick=()=>{ R.token++; coach.cancel(); R.analyzing=false; $('#progressCard').classList.add('hidden'); renderMoves(); renderGraph(); if(R.res.filter(Boolean).length) renderSummary(); };
+  $('#navFirst').onclick=()=>goto(0); $('#navLast').onclick=()=>goto(1e9); $('#navPrev').onclick=()=>goto(R.cur-1); $('#navNext').onclick=()=>goto(R.cur+1);
+  $('#navFlip').onclick=()=>{ R.flip=!R.flip; renderReview(); };
+  $('#graph').addEventListener('click', e=>{ if(!R.game) return; const r=e.currentTarget.getBoundingClientRect(); goto(Math.round((e.clientX-r.left)/r.width*(R.game.fens.length-1))); });
+  document.addEventListener('keydown', e=>{ if(currentTab!=='review' || /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+    if(e.key==='ArrowRight'){ goto(R.cur+1); e.preventDefault(); } else if(e.key==='ArrowLeft'){ goto(R.cur-1); e.preventDefault(); }
+    else if(e.key==='ArrowUp'||e.key==='Home'){ goto(0); e.preventDefault(); } else if(e.key==='ArrowDown'||e.key==='End'){ goto(1e9); e.preventDefault(); } });
+  $('#tabReview').onclick=()=>setTab('review'); $('#tabPlay').onclick=()=>setTab('play');
+  renderLevels();
+  $$('#colorSeg button').forEach(b=>b.onclick=()=>{ $$('#colorSeg button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); });
+  $('#newGameBtn').onclick=newPlayGame; $('#hintBtn').onclick=hint; $('#whyBtn').onclick=showWhy; $('#undoBtn').onclick=undo;
+  $('#playFlip').onclick=()=>{ P.flip=!P.flip; renderPlay(); };
+  $('#reviewPlayedBtn').onclick=()=>{ if(!P.chess.history().length){ toast('עוד לא שוחקו מהלכים'); return; }
+    P.chess.header('White', P.userColor==='w'?LS.get('chesscom_user','Nibl82'):'המאמן', 'Black', P.userColor==='b'?LS.get('chesscom_user','Nibl82'):'המאמן');
+    const pgn=P.chess.pgn(); setTab('review'); setSrc('pgn'); $('#pgnInput').value=pgn; startReview(pgn); };
+  initNarrator();
+  renderReview();
+}
+init();
+
+</script>
+</body>
+</html>
