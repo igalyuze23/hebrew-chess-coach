@@ -56,6 +56,26 @@ svg.arrows{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;
 .ghost{position:fixed;pointer-events:none;z-index:1000;transform:translate(-50%,-50%)}
 .players{display:flex;justify-content:space-between;align-items:center;margin:6px 0 6px 34px;font-size:14px;direction:rtl}
 .players .p{display:flex;gap:8px;align-items:center}
+.mat{display:flex;align-items:center;direction:ltr;min-height:20px;gap:0;flex-wrap:nowrap}
+.mat .grp{display:inline-flex;margin-right:5px}
+.mat img{width:19px;height:19px;margin-right:-8px}
+.mat .grp img:last-child{margin-right:0}
+.mat img.b{filter:drop-shadow(0 0 1px #ffffffaa)}
+.mat .adv{font-size:13px;font-weight:800;color:#c9d1dc;margin-left:3px;font-family:ui-monospace,Consolas,monospace}
+.varbar{display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap;margin:10px 0 0 34px;padding:8px 10px;border-radius:12px;background:#4aa3ff14;border:1px solid #4aa3ff55}
+.varbar .vt{font-weight:700;font-size:13.5px}
+.fixbtn{margin-top:10px}
+.varmoves{direction:ltr;text-align:left;margin-top:10px;padding:8px;border-radius:10px;background:var(--bg2);border:1px solid var(--line);font-family:ui-monospace,Consolas,monospace;font-size:13.5px;line-height:2}
+.varmoves .vm{cursor:pointer;padding:2px 5px;border-radius:6px;display:inline-flex;align-items:center;gap:4px}
+.varmoves .vm:hover{background:#ffffff14}
+.varmoves .vm.cur{background:#4aa3ff40;outline:1px solid #4aa3ff90}
+.varmoves .vm .ci{width:17px;min-width:17px;height:17px;font-size:9.5px}
+.varmoves .vm.fix{color:#a7d97a}
+.varmoves .vno{color:var(--muted);margin:0 2px}
+.fixhead{color:#a7d97a}
+.explain bdi.san{white-space:normal}
+.explain{overflow-wrap:anywhere}
+.varnote{font-size:12.5px;color:var(--muted);margin-top:8px}
 .players .sw{width:14px;height:14px;border-radius:3px;border:1px solid #000;display:inline-block}
 .navbar{display:flex;gap:6px;justify-content:center;margin-top:10px;direction:ltr;padding-left:34px}
 .btn{background:var(--card2);border:1px solid var(--line);padding:8px 14px;border-radius:10px;cursor:pointer;font-weight:600;transition:.15s}
@@ -137,6 +157,9 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:20px}
   .evalbar{width:18px}
   .players,.navbar,.ttsbar{margin-left:26px;padding-left:0}
   .ttsnote{margin-left:0}
+  .varbar{margin-left:26px}
+  .mat img{width:16px;height:16px;margin-right:-7px}
+  .players .p{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 }
 </style>
 </head>
@@ -152,18 +175,23 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:20px}
 <main>
 <div class="layout">
   <section class="boardcol">
-    <div class="players"><div class="p" id="topPlayer"></div><div class="small muted" id="topClock"></div></div>
+    <div class="players"><div class="p" id="topPlayer"></div><div class="mat" id="topMat"></div></div>
     <div class="boardwrap">
       <div class="evalbar" id="evalbar"><div class="w" id="evalW" style="height:50%"></div><div class="lbl top" id="evalTop"></div><div class="lbl bot" id="evalBot">0.0</div></div>
       <div class="board" id="board"></div>
     </div>
-    <div class="players"><div class="p" id="botPlayer"></div><div class="small muted"></div></div>
+    <div class="players"><div class="p" id="botPlayer"></div><div class="mat" id="botMat"></div></div>
     <div class="navbar" id="reviewNav">
       <button class="btn icon" id="navFirst" title="להתחלה">⏮</button>
       <button class="btn icon" id="navPrev" title="מהלך קודם (←)">◀</button>
       <button class="btn icon" id="navNext" title="מהלך הבא (→)">▶</button>
       <button class="btn icon" id="navLast" title="לסוף">⏭</button>
       <button class="btn icon" id="navFlip" title="הפוך לוח">⇅</button>
+    </div>
+    <div class="varbar hidden" id="varBar">
+      <span class="vt">🔀 וריאציה</span>
+      <button class="btn sm" id="varEngineBtn" title="המנוע ישחק את המהלך הטוב ביותר בעמדה">🤖 תשובת המנוע</button>
+      <button class="btn sm primary" id="varBackBtn">↩ חזרה לניתוח המשחק</button>
     </div>
     <div class="ttsbar">
       <button class="btn sm" id="ttsBtn" title="הפעל/כבה קריין">🔇 קריין</button>

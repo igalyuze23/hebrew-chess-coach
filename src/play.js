@@ -25,6 +25,7 @@ function renderPlay(){
   const bot=`<span class="sw" style="background:${P.userColor==='w'?'#222':'#fff'}"></span><b>המאמן</b> <span class="muted">(רמה ${P.level+1}, <bdi dir="ltr">${lvl.elo}</bdi>)</span>${P.thinking?' <span class="muted small">חושב…</span>':''}`;
   const userBottom = (P.userColor==='w') !== P.flip;
   $('#topPlayer').innerHTML = userBottom?bot:me; $('#botPlayer').innerHTML = userBottom?me:bot;
+  renderMaterial(null, h, fen, userBottom ? other(P.userColor) : P.userColor);
   // move list
   let t='<table>'; for(let k=0;k<h.length;k+=2){ const cell=j=>{ if(j>=h.length) return '<td></td>'; const r=P.history[j]; return `<td><span class="mv">${r&&r.res?ci(r.res.cls):''}${h[j].san}</span></td>`; }; t+=`<tr><td class="no">${k/2+1}.</td>${cell(k)}${cell(k+1)}</tr>`; }
   $('#playMoves').innerHTML=t+'</table>'; $('#playMoves').scrollTop=1e6;
@@ -114,14 +115,15 @@ function setTab(t){
   $('#reviewPanel').classList.toggle('hidden',t!=='review'); $('#playPanel').classList.toggle('hidden',t!=='play');
   $('#reviewNav').classList.toggle('hidden',t!=='review'); $('#playNav').classList.toggle('hidden',t!=='play');
   $('#autoBtn').classList.toggle('hidden', t!=='review'); if(t!=='review') stopAuto();
+  $('#varBar').classList.toggle('hidden', t!=='review' || !R.v);
   board.clearSel(); if(t==='review') renderReview(); else renderPlay();
 }
 function init(){
   board=new BoardUI($('#board'), {
-    interactive:()=>currentTab==='play' && !P.over && !P.thinking && P.chess.turn()===P.userColor,
-    canPick:c=>c===P.userColor,
-    targets:sq=>P.chess.moves({square:sq, verbose:true}).map(m=>m.to),
-    onMove:(f,t)=>userMove(f,t),
+    interactive:()=> currentTab==='play' ? (!P.over && !P.thinking && P.chess.turn()===P.userColor) : (!!R.game && !NAR.auto && !new Chess(reviewFen()).game_over()),
+    canPick:c=> currentTab==='play' ? c===P.userColor : c===reviewFen().split(' ')[1],
+    targets:sq=> currentTab==='play' ? P.chess.moves({square:sq, verbose:true}).map(m=>m.to) : new Chess(reviewFen()).moves({square:sq, verbose:true}).map(m=>m.to),
+    onMove:(f,t)=> currentTab==='play' ? userMove(f,t) : reviewUserMove(f,t),
   });
   setEngineStatus('טוען מנוע…', false);
   try{ coach=new Engine('coach'); coach.ready.then(()=>setEngineStatus('Stockfish 19 מוכן', true)); }
@@ -133,12 +135,14 @@ function init(){
   $('#pgnBtn').onclick=()=>{ const games=splitPgns($('#pgnInput').value); if(!games.length){ $('#importMsg').textContent='הדבק PGN תקין'; return; } startReview(games[0]); if(games.length>1) toast(`נמצאו ${games.length} משחקים, מנתח את הראשון.`); };
   $('#sampleBtn').onclick=()=>{ $('#pgnInput').value=SAMPLE_PGN; startReview(SAMPLE_PGN); };
   $('#stopBtn').onclick=()=>{ R.token++; coach.cancel(); R.analyzing=false; $('#progressCard').classList.add('hidden'); renderMoves(); renderGraph(); if(R.res.filter(Boolean).length) renderSummary(); };
-  $('#navFirst').onclick=()=>goto(0); $('#navLast').onclick=()=>goto(1e9); $('#navPrev').onclick=()=>goto(R.cur-1); $('#navNext').onclick=()=>goto(R.cur+1);
+  $('#navFirst').onclick=()=>navTo('first'); $('#navLast').onclick=()=>navTo('last'); $('#navPrev').onclick=()=>navTo('prev'); $('#navNext').onclick=()=>navTo('next');
+  $('#varBackBtn').onclick=()=>exitVariation(); $('#varEngineBtn').onclick=varEngineMove;
   $('#navFlip').onclick=()=>{ R.flip=!R.flip; renderReview(); };
   $('#graph').addEventListener('click', e=>{ if(!R.game) return; const r=e.currentTarget.getBoundingClientRect(); goto(Math.round((e.clientX-r.left)/r.width*(R.game.fens.length-1))); });
   document.addEventListener('keydown', e=>{ if(currentTab!=='review' || /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
-    if(e.key==='ArrowRight'){ goto(R.cur+1); e.preventDefault(); } else if(e.key==='ArrowLeft'){ goto(R.cur-1); e.preventDefault(); }
-    else if(e.key==='ArrowUp'||e.key==='Home'){ goto(0); e.preventDefault(); } else if(e.key==='ArrowDown'||e.key==='End'){ goto(1e9); e.preventDefault(); } });
+    if(e.key==='ArrowRight'){ navTo('next'); e.preventDefault(); } else if(e.key==='ArrowLeft'){ navTo('prev'); e.preventDefault(); }
+    else if(e.key==='ArrowUp'||e.key==='Home'){ navTo('first'); e.preventDefault(); } else if(e.key==='ArrowDown'||e.key==='End'){ navTo('last'); e.preventDefault(); }
+    else if(e.key==='Escape' && R.v){ exitVariation(); e.preventDefault(); } });
   $('#tabReview').onclick=()=>setTab('review'); $('#tabPlay').onclick=()=>setTab('play');
   renderLevels();
   $$('#colorSeg button').forEach(b=>b.onclick=()=>{ $$('#colorSeg button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); });

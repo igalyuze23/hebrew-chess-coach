@@ -89,6 +89,40 @@ function pinsBy(b, color){
   return res;
 }
 function material(b){ let s=0; for(const k in b){ const v=VAL[b[k].type]; s += b[k].color==='w'?v:-v; } return s; }
+/* ---- material counter: captured pieces per side + balance (P1 N3 B3 R5 Q9) ---- */
+const START_CNT={p:8,n:2,b:2,r:2,q:1};
+function capturedFromFen(fen){ // pieces already missing in a custom start position (promotion-aware heuristic)
+  const b=parseFen(fen); const cnt={w:{p:0,n:0,b:0,r:0,q:0}, b:{p:0,n:0,b:0,r:0,q:0}};
+  for(const s in b){ const p=b[s]; if(p.type!=='k') cnt[p.color][p.type]++; }
+  const caps={w:[], b:[]}; // caps.w = black pieces taken by white
+  for(const c of ['w','b']){ const k=cnt[c]; let promo=0; for(const t of 'nbrq') promo+=Math.max(0,k[t]-START_CNT[t]);
+    const miss={p:Math.max(0,8-k.p-promo)}; for(const t of 'nbrq') miss[t]=Math.max(0,START_CNT[t]-k[t]);
+    for(const t of 'pnbrq') for(let i=0;i<miss[t];i++) caps[other(c)].push(t); }
+  return caps;
+}
+function materialState(startFen, moves, fen){
+  const caps = startFen ? capturedFromFen(startFen) : {w:[], b:[]};
+  for(const m of moves||[]){ if(m && m.captured) caps[m.color].push(m.captured); }
+  const ord='pnbrq'; caps.w.sort((a,b)=>ord.indexOf(a)-ord.indexOf(b)); caps.b.sort((a,b)=>ord.indexOf(a)-ord.indexOf(b));
+  return {caps, diff: material(parseFen(fen))}; // diff = white minus black
+}
+function matHtml(st, color){
+  const list=st.caps[color]; const oc=other(color); let h='', last=null, grp='';
+  for(const t of list){ if(t!==last){ if(grp) h+=`<span class="grp">${grp}</span>`; grp=''; last=t; } grp+=`<img src="${PIECE_IMG[oc+t]}" alt="${HE[t]}" class="${oc}">`; }
+  if(grp) h+=`<span class="grp">${grp}</span>`;
+  const adv = color==='w' ? st.diff : -st.diff;
+  if(adv>0) h+=`<b class="adv">+${adv}</b>`;
+  return h;
+}
+function renderMaterial(startFen, moves, fen, topColor){
+  const st=materialState(startFen, moves, fen);
+  const t=$('#topMat'), b=$('#botMat'); if(!t||!b) return st;
+  t.innerHTML=matHtml(st, topColor); b.innerHTML=matHtml(st, other(topColor));
+  const tip=c=>{ const a=c==='w'?st.diff:-st.diff; return (c==='w'?'הלבן':'השחור')+' לקח: '+(st.caps[c].map(x=>HE[x]).join(', ')||'כלום')+(a>0?` · יתרון חומר +${a}`:''); };
+  t.title=tip(topColor); b.title=tip(other(topColor));
+  t.dataset.adv = (topColor==='w'?st.diff:-st.diff); b.dataset.adv = (topColor==='w'?-st.diff:st.diff);
+  return st;
+}
 function nonPawnMaterial(b){ let s=0; for(const k in b){ if(!'pk'.includes(b[k].type)) s+=VAL[b[k].type]; } return s; }
 
 /* ---- chess.js helpers ---- */

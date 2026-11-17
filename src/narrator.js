@@ -83,6 +83,7 @@ function stopAuto(){ if(NAR.auto){ NAR.auto=false; NAR.autoTok++; updateTtsUi();
 async function autoplay(){
   if(NAR.auto){ stopAuto(); if('speechSynthesis' in window) speechSynthesis.cancel(); return; }
   if(!R.game){ toast('קודם טען משחק לניתוח'); return; }
+  if(R.v) exitVariation(false);
   NAR.auto=true; const tok=++NAR.autoTok; updateTtsUi();
   if(R.cur>=R.game.fens.length-1) R.cur=0;
   while(NAR.auto && tok===NAR.autoTok && R.cur < R.game.fens.length-1){

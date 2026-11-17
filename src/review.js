@@ -154,8 +154,214 @@ function explainMove(mv, anB, anA, res, opening){
   return {html: out, tags:[...tags]};
 }
 
+/* ================= "Fix the move": why the engine's move is better ================= */
+function evalPawnsPov(l, sign){ // l = line for side-to-move; sign converts to mover POV (+1 / -1)
+  if(!l) return null; if(l.terminal==='mate') return sign>0 ? -100 : 100; if(l.terminal==='draw') return 0;
+  if(l.mate!=null) return (l.mate*sign>0) ? 100 : -100; return l.cp*sign/100;
+}
+function explainFix(mv, anB, anA, res){
+  const mover=mv.color, opp=other(mover); const moverHe = mover==='w'?'הלבן':'השחור';
+  const lB=anB.lines[0], lA=anA.lines[0];
+  const bestUci=lB.pv && lB.pv[0]; if(!bestUci) return null;
+  const c=new Chess(mv.fenBefore); const best=mvFromUci(c, bestUci); if(!best) return null;
+  const fenAfterBest=c.fen();
+  const bB=parseFen(mv.fenBefore), bF=parseFen(fenAfterBest), bA=parseFen(mv.fenAfter);
+  const pts=[]; const P=HED[best.piece];
+  const verb=(m,f)=>gv(best.piece,m,f);
+  // 1. mate
+  if(c.in_checkmate()) pts.push(`${san(best.san)} הוא <b>מט מיידי</b>!`);
+  else if(lB.mate!=null && lB.mate>0) pts.push(`${san(best.san)} פותח <b>מט ב-${lB.mate}</b>: ${pvText(mv.fenBefore, lB.pv, Math.min(lB.mate*2-1, 9))}`);
+  // 2. capture
+  if(best.captured){
+    const hangOpp=hangingPieces(bB, opp).map(h=>h.sq);
+    const capSq = best.flags.includes('e') ? best.to[0]+(mover==='w'?'5':'4') : best.to;
+    if(hangOpp.includes(capSq) || attackersOf(bF, best.to, opp).length===0) pts.push(`${P} ${verb('לוקח','לוקחת')} את ${HED[best.captured]} ב-${sqh(best.to)} <b>בחינם</b>: ${gv(best.captured,'הוא לא היה מוגן מספיק','היא לא הייתה מוגנת מספיק')} (+${VAL[best.captured]} חומר).`);
+    else if(VAL[best.captured] > VAL[best.piece]) pts.push(`${P} ${verb('לוקח','לוקחת')} את ${HED[best.captured]} ב-${sqh(best.to)}. גם אם היריב יחזיר לקיחה, זה <b>חילוף משתלם</b> (${VAL[best.captured]} תמורת ${VAL[best.piece]}).`);
+    else pts.push(`${P} ${verb('לוקח','לוקחת')} את ${HED[best.captured]} ב-${sqh(best.to)}.`);
+  }
+  if(best.promotion) pts.push(`הרגלי <b>מוכתר</b> ל${HE[best.promotion]}.`);
+  if(best.flags.includes('k')||best.flags.includes('q')) pts.push('הצרחה: המלך עובר למקום בטוח והצריח נכנס למשחק.');
+  // 3. check / fork / pin / threats
+  const ft=forkTargets(bF, best.to);
+  if(ft.length) pts.push(`<b>מזלג!</b> ${P} ב-${sqh(best.to)} ${verb('תוקף','תוקפת')} בבת אחת את ${ft.map(s=>HED[bF[s].type]+' ב-'+sqh(s)).join(' ואת ')}.`);
+  const pins=pinsBy(bF, mover).filter(p=>p.pinner===best.to);
+  if(pins.length){ const p=pins[0]; pts.push(`נוצרת <b>הצמדה</b> על ${HED[bF[p.pinned].type]} ב-${sqh(p.pinned)}, מול ${HED[bF[p.behind].type]} ב-${sqh(p.behind)}${p.absolute?' (הצמדה מוחלטת)':''}.`); }
+  if(c.in_check() && !c.in_checkmate() && !ft.length) pts.push(`המהלך נותן <b>שח</b>, והיריב חייב להגיב עליו.`);
+  if(!ft.length && !c.in_checkmate()){
+    const hangBeforeOpp=new Set(hangingPieces(bB, opp).map(h=>h.sq));
+    const threats=hangingPieces(bF, opp).filter(h=>!hangBeforeOpp.has(h.sq) || h.attackers.includes(best.to)).filter(h=>h.sq!==best.to);
+    const direct=threats.filter(h=>h.attackers.includes(best.to));
+    const disc=threats.filter(h=>!h.attackers.includes(best.to));
+    if(direct.length){ const t=direct.sort((a,b)=>VAL[b.piece.type]-VAL[a.piece.type])[0]; pts.push(`${P} ${verb('מאיים','מאיימת')} על ${HED[t.piece.type]} ב-${sqh(t.sq)}, ${t.defended?(gv(t.piece.type,'ששווה יותר מהתוקף','ששווה יותר מהתוקפת')):(gv(t.piece.type,'שלא מוגן','שלא מוגנת'))}.`); }
+    if(!direct.length && !best.captured){ const press=attacksFrom(bF,best.to).filter(q=>bF[q] && bF[q].color===opp && bF[q].type!=='k' && !attacksFrom(bB,best.from).includes(q)); if(press.length){ const q=press.sort((a,b)=>VAL[bF[b].type]-VAL[bF[a].type])[0]; pts.push(`${P} ${verb('מוסיף','מוסיפה')} <b>לחץ</b> על ${HED[bF[q].type]} ב-${sqh(q)}.`); } }
+    if(disc.length){ const t=disc.sort((a,b)=>VAL[b.piece.type]-VAL[a.piece.type])[0]; pts.push(`המהלך <b>פותח קו</b>, ועכשיו ${HED[t.piece.type]} של היריב ב-${sqh(t.sq)} ${gv(t.piece.type,'מותקף','מותקפת')} (${HED[bF[t.attackers[0]].type]} מ-${sqh(t.attackers[0])}).`); }
+  }
+  // 4. defence: pieces of ours that were en prise and are safe after the best move
+  const hangMine=hangingPieces(bB, mover); const hangMineAfter=new Set(hangingPieces(bF, mover).map(h=>h.sq));
+  for(const h of hangMine){
+    if(h.sq===best.from){ if(!hangMineAfter.has(best.to)) pts.push(`${P} ב-${sqh(best.from)} ${gv(best.piece,'היה מותקף','הייתה מותקפת')}, והמהלך <b>${gv(best.piece,'מוציא אותו','מוציא אותה')} מהסכנה</b>.`); }
+    else if(!hangMineAfter.has(h.sq) && bF[h.sq] && bF[h.sq].color===mover && !best.captured) pts.push(`המהלך <b>מגן</b> על ${HED[h.piece.type]} ב-${sqh(h.sq)}, ${gv(h.piece.type,'שהיה תלוי','שהייתה תלויה')}.`);
+  }
+  // 5. what the game move allowed that the fix prevents
+  const reply=lA.pv && lA.pv[0] ? uciToMove(mv.fenAfter, lA.pv[0]) : null;
+  if(lA.mate!=null && lA.mate>0) pts.push(`אחרי ${san(mv.san)} במשחק ליריב היה <b>מט ב-${lA.mate}</b>. ${san(best.san)} מונע את זה.`);
+  else if(reply && reply.captured && mv.uci!==bestUci && hangingPieces(bA, mover).some(h=>h.sq===reply.to) && VAL[reply.captured] - (reply.to===mv.to && mv.captured ? VAL[mv.captured] : 0) >= 1){
+    const cc=new Chess(fenAfterBest); const r=mvFromUci(cc, lA.pv[0]);
+    const okNow = !r || !r.captured || r.to!==reply.to || !hangingPieces(parseFen(fenAfterBest), mover).some(h=>h.sq===reply.to);
+    if(okNow) pts.push(`אחרי ${san(mv.san)} במשחק היריב יכול היה לשחק ${san(reply.san)} ולקחת את ${HED[reply.captured]}. עם ${san(best.san)} זה כבר לא עובד.`);
+  }
+  if(reply && mv.captured && reply.captured && reply.to===mv.to && VAL[reply.captured]===VAL[mv.captured]) pts.push(`${san(mv.san)} במשחק רק <b>מחליף</b> את ${HED[mv.piece]} ב${HE[mv.captured]} (אחרי ${san(reply.san)}), וזה לא משפר את העמדה.`);
+  // 6. quiet positional ideas
+  if(!pts.length || pts.every(x=>x.includes('<b>מחליף</b>'))){
+    const backRank = mover==='w'?'1':'8';
+    if('nb'.includes(best.piece) && best.from[1]===backRank) pts.push(`<b>פיתוח</b>: ${P} יוצא לעמדה פעילה ב-${sqh(best.to)}.`);
+    else if(best.piece==='p' && 'de'.includes(best.to[0])) pts.push(`הרגלי תופס <b>מרכז</b> ונותן מקום לכלים.`);
+    else { const act=attacksFrom(bF,best.to).length, was=attacksFrom(bB,best.from).length;
+      if(best.piece!=='p' && act>was) pts.push(`${P} ${verb('עובר','עוברת')} לעמדה פעילה יותר ב-${sqh(best.to)} (שולט ב-${act} משבצות במקום ${was}).`);
+      else pts.push(`זה מהלך שקט, אבל המנוע רואה שהוא שומר על העמדה הכי טובה ל${moverHe.slice(1)}.`); }
+  }
+  // eval / win% / material comparison
+  const sign = anB.stm===mover ? 1 : -1;
+  const eBest = evalPawnsPov(lB, sign), ePlayed = evalPawnsPov(lA, anA.stm===mover?1:-1);
+  const fmt = v => v>=100?'מט לטובתך':v<=-100?'מט לטובת היריב':(v>0?'+':'')+v.toFixed(1);
+  let evl = `<b>הערכת המנוע</b> (מנקודת המבט של ${moverHe}): ${san(fmt(eBest))} אחרי ${san(best.san)}, לעומת ${san(fmt(ePlayed))} אחרי ${san(mv.san)} במשחק`;
+  if(Math.abs(eBest)<100 && Math.abs(ePlayed)<100) evl += ` – הפרש של <b>${(eBest-ePlayed).toFixed(1)}</b> רגלים.`; else evl+='.';
+  const wpBest=Math.round(res.wpB), wpPlayed=Math.round(res.wpA);
+  evl += ` סיכויי הניצחון: <b>${wpBest}%</b> במקום ${wpPlayed}%.`;
+  const s2 = mover==='w'?1:-1; const matDiff = s2*materialAfterLine(mv.fenBefore, lB.pv) - s2*materialAfterLine(mv.fenAfter, lA.pv);
+  const extra = matDiff>=2 && !(lB.mate>0) ? ` לפי ההמשך של המנוע, התיקון שווה בערך <b>${matDiff} נקודות חומר</b> יותר.` : '';
+  const html = [
+    ...pts,
+    evl + extra,
+    `<span class="pvline"><b>ההמשך של המנוע:</b> ${pvText(mv.fenBefore, lB.pv, 8)}</span>`,
+  ];
+  return {html, best, fenAfterBest};
+}
+
+/* ================= Variations (sidelines) in review ================= */
+// R.v = { base, retCur, title, fix, fens[], moves[], an[], res[], exp[], cur }
+function startVariation(base, opts={}){
+  stopAuto();
+  const g=R.game; const fen=g.fens[base];
+  R.v = { base, retCur: opts.retCur!=null ? opts.retCur : R.cur, title: opts.title||'וריאציה', fix: opts.fix||null, fens:[fen], moves:[], an:[R.an[base]||null], res:[], exp:[], cur:0, id: Math.random() };
+  $('#varBar').classList.remove('hidden');
+  document.body.classList.add('in-var');
+}
+function exitVariation(render=true){
+  if(!R.v) return; const ret=R.v.retCur; R.v=null; $('#varBar').classList.add('hidden'); document.body.classList.remove('in-var');
+  board.clearSel();
+  R.cur=Math.max(0, Math.min(R.game.fens.length-1, ret));
+  if(render){ renderReview(); if(NAR.on) say('חזרה לניתוח המשחק.'); }
+}
+function fixMove(k){
+  const g=R.game; const mv=g.moves[k]; const res=R.res[k]; if(!mv || !res) return;
+  const f=explainFix(mv, R.an[k], R.an[k+1], res); if(!f){ toast('אין מהלך טוב יותר להצגה'); return; }
+  startVariation(k, {retCur:R.cur, title:`תיקון של ${san(moveNo(k)+mv.san)}`, fix:{k, html:f.html, played:mv}});
+  varPush(f.best);
+  renderReview();
+  if(innerWidth<900) window.scrollTo({top:0, behavior:'smooth'});
+  if(NAR.on) say(`התיקון: ${spSan(f.best.san)}. ${speakHtml(f.html[0]||'')}`);
+}
+function varPush(m){
+  const v=R.v; const fenBefore=v.fens[v.cur]; const c=new Chess(fenBefore);
+  const mm = typeof m==='string' ? mvFromUci(c, m) : c.move({from:m.from, to:m.to, promotion:m.promotion||'q'});
+  if(!mm) return null;
+  // truncate anything after the current position (new branch)
+  v.fens.length=v.cur+1; v.moves.length=v.cur; v.an.length=v.cur+1; v.res.length=v.cur; v.exp.length=v.cur;
+  v.moves.push({san:mm.san, uci:mm.from+mm.to+(mm.promotion||''), from:mm.from, to:mm.to, color:mm.color, piece:mm.piece, captured:mm.captured, promotion:mm.promotion, flags:mm.flags, fenBefore, fenAfter:c.fen()});
+  v.fens.push(c.fen()); v.an.push(null); v.cur++;
+  varAnalyze(v.cur-1); varAnalyze(v.cur);
+  return mm;
+}
+async function varAnalyze(j){
+  const v=R.v; if(!v || v.an[j]) return; const fen=v.fens[j]; if(!fen) return;
+  if(v.pending && v.pending[fen]) return; v.pending=v.pending||{}; v.pending[fen]=true;
+  let an=terminalInfo(fen); if(!an) an=await coach.search(fen, {depth:12, multipv:2});
+  if(v.pending) delete v.pending[fen];
+  if(R.v!==v || v.fens[j]!==fen || !an) return;
+  v.an[j]=an; varCompute(j-1); varCompute(j);
+  if(currentTab==='review') renderReview();
+}
+function varCompute(k){
+  const v=R.v; if(!v || k<0 || k>=v.moves.length || !v.an[k] || !v.an[k+1]) return;
+  if(k===0 && v.fix) return; // the fix itself has its own explanation
+  const prev = k>0 ? v.res[k-1] : null;
+  const res=classify(v.moves[k], v.an[k], v.an[k+1], 999, 0, prev?prev.cls:null, k>0?v.moves[k-1]:null);
+  v.res[k]=res; v.exp[k]=explainMove(v.moves[k], v.an[k], v.an[k+1], res, null);
+}
+function varGoto(i){ const v=R.v; if(!v) return; v.cur=Math.max(0, Math.min(v.fens.length-1, i)); board.clearSel(); renderReview(); }
+function varMoveNo(v, k){ // SAN number for variation move k
+  const fen=v.fens[k]; const parts=fen.split(' '); const no=+parts[5]||1; return parts[1]==='w' ? no+'. ' : no+'... ';
+}
+async function varEngineMove(){
+  const v=R.v; if(!v) return; const j=v.cur; const fen=v.fens[j];
+  if(new Chess(fen).game_over()){ toast('המשחק בעמדה הזו נגמר'); return; }
+  let an=v.an[j]; if(!an){ toast('המנוע חושב…', 1500); an=await coach.search(fen, {depth:12, multipv:2}); if(R.v!==v || v.fens[j]!==fen || !an) return; v.an[j]=an; }
+  const u=an.lines[0] && an.lines[0].pv && an.lines[0].pv[0]; if(!u) return;
+  v.cur=j; const m=varPush(u); if(m && NAR.on) say('המנוע משחק: '+spSan(m.san));
+  renderReview();
+}
+function reviewUserMove(from, to){
+  if(!R.game) return;
+  if(!R.v) startVariation(R.cur, {retCur:R.cur, title:`וריאציה חופשית מ-${R.cur?san(moveNo(R.cur-1)+R.game.moves[R.cur-1].san):'עמדת הפתיחה'}`});
+  const m=varPush({from, to, promotion:'q'}); if(!m) return;
+  if(NAR.on) say(spSan(m.san));
+  renderReview();
+}
+function reviewFen(){ if(!R.game) return null; return R.v ? R.v.fens[R.v.cur] : R.game.fens[R.cur]; }
+function navTo(where){
+  if(R.v){ const v=R.v; varGoto(where==='first'?0: where==='last'?1e9 : where==='prev'? v.cur-1 : v.cur+1); return; }
+  goto(where==='first'?0: where==='last'?1e9 : where==='prev'? R.cur-1 : R.cur+1);
+}
+function renderVariation(){
+  const g=R.game, v=R.v; const i=v.cur; const fen=v.fens[i];
+  const mv=i>0?v.moves[i-1]:null; const isFix = v.fix && i===1; const res = i>0 && !isFix ? v.res[i-1] : null;
+  const arrows=[];
+  if(i===0 && v.fix){ const b=v.moves[0]; if(b) arrows.push({from:b.from, to:b.to, color:'#81b64c'}); const p=v.fix.played; arrows.push({from:p.from, to:p.to, color:'#ca3431', w:12, op:.55}); }
+  else if(mv && res && !res.isBest && v.an[i-1]){ const bu=v.an[i-1].lines[0].pv && v.an[i-1].lines[0].pv[0]; if(bu) arrows.push({from:bu.slice(0,2), to:bu.slice(2,4), color:'#81b64c'}); }
+  else if(v.an[i] && v.an[i].lines[0].pv && v.an[i].lines[0].pv[0]){ const bu=v.an[i].lines[0].pv[0]; arrows.push({from:bu.slice(0,2), to:bu.slice(2,4), color:'#4aa3ff', w:12, op:.6}); }
+  const c=new Chess(fen); let chk=null; if(c.in_check()){ const b=parseFen(fen); chk=Object.keys(b).find(s=>b[s].type==='k'&&b[s].color===c.turn()); }
+  const badge = isFix ? {sq:mv.to, sym:'★', color:CLS.best.hex} : (res ? {sq:mv.to, sym:CLS[res.cls].sym, color:CLS[res.cls].hex} : null);
+  board.set({fen, flip:R.flip, hl: mv?[mv.from,mv.to]:[], arrows, check:chk, badge});
+  const an=v.an[i]; if(an) setEvalBar(wpWhite(an), shortEval(an.lines[0], an.stm), R.flip);
+  else if(isFix && v.an[0]) setEvalBar(wpWhite(v.an[0]), shortEval(v.an[0].lines[0], v.an[0].stm), R.flip);
+  $('#topPlayer').innerHTML=playerLabel(R.flip?'w':'b'); $('#botPlayer').innerHTML=playerLabel(R.flip?'b':'w');
+  renderMaterial(g.startFen, g.moves.slice(0, v.base).concat(v.moves.slice(0, i)), fen, R.flip?'w':'b');
+  // explanation
+  let body='';
+  if(isFix){
+    const p=v.fix.played;
+    body = `<div class="head fixhead">${ci('best')}<span>התיקון: ${san(varMoveNo(v,0)+mv.san)} במקום ${san(p.san)}</span></div><div class="small muted">למה ${san(mv.san)} טוב יותר:</div><ul>${v.fix.html.map(x=>`<li>${x}</li>`).join('')}</ul>`;
+  } else if(i===0){
+    body = v.fix ? `<div class="head">🔧 העמדה לפני ${san(moveNo(v.fix.k)+v.fix.played.san)}</div><div class="muted">החץ האדום הוא המהלך שנשחק במשחק, והירוק הוא התיקון. לחץ ▶ כדי לראות אותו.</div>`
+                 : `<div class="head">🔀 וריאציה חופשית</div><div class="muted">הזז כלי על הלוח כדי לבדוק רעיון משלך.</div>`;
+  } else if(!res){
+    body = `<div class="head">${san(varMoveNo(v,i-1)+mv.san)}</div><div class="muted">המאמן בודק את המהלך…</div>`;
+  } else {
+    const e=v.exp[i-1]; const anB=v.an[i-1], anA=v.an[i];
+    body = `<div class="head">${ci(res.cls)}<span>${san(varMoveNo(v,i-1)+mv.san)} – ${CLS[res.cls].he}</span></div><ul>${e.html.map(x=>`<li>${x}</li>`).join('')}</ul>
+      <div class="evalline">הערכה: ${san(evalText(anB.lines[0], anB.stm))} ← לפני · אחרי → ${san(evalText(anA.lines[0], anA.stm))}</div>`;
+  }
+  if(c.in_checkmate()) body += `<div class="varnote"><b>מט!</b> הווריאציה הסתיימה.</div>`;
+  else if(c.game_over()) body += `<div class="varnote">תיקו – הווריאציה הסתיימה.</div>`;
+  // variation move list
+  let ml=''; v.moves.forEach((m,k)=>{ const fen0=v.fens[k]; const w=fen0.split(' ')[1]==='w';
+    if(w || k===0) ml+=`<span class="vno">${varMoveNo(v,k).trim()}</span>`;
+    const r=v.res[k]; const isF = v.fix && k===0;
+    ml+=`<span class="vm${isF?' fix':''}${k+1===i?' cur':''}" data-k="${k+1}">${isF?ci('best'):(r?ci(r.cls):'')}${m.san}</span> `; });
+  const head = `<div class="opening">🔀 ${v.title} · <a href="#" id="varBackLink">חזרה לניתוח המשחק</a></div>`;
+  $('#explainBox').innerHTML = body + `<div class="varmoves" id="varMoves">${ml || '<span class="muted">…</span>'}</div>
+    <div class="varnote">אפשר להמשיך לשחק מכאן בשני הצדדים (גרור או לחץ על כלי), ללחוץ "🤖 תשובת המנוע", או לעבור בין המהלכים בחצים.</div>
+`;
+  $('#openingName').innerHTML = head;
+  $$('#varMoves .vm').forEach(el=>el.onclick=()=>varGoto(+el.dataset.k));
+  $('#varBackLink').onclick=e=>{ e.preventDefault(); exitVariation(); };
+  $$('.mv').forEach(el=>el.classList.toggle('cur', +el.dataset.ply===v.base+(v.fix?1:0)));
+  renderGraphCursor();
+}
+
 /* ================= Review state & UI ================= */
-const R = { game:null, an:[], res:[], exp:[], cur:0, flip:false, token:0, analyzing:false, userColor:null, opening:null, bookLen:0 };
+const R = { v:null, openingHtml:'', game:null, an:[], res:[], exp:[], cur:0, flip:false, token:0, analyzing:false, userColor:null, opening:null, bookLen:0 };
 let coach=null, board=null;
 
 function userColorFor(headers){
@@ -170,13 +376,15 @@ async function startReview(pgn){
   if(coach) coach.cancel(); stopAuto();
   const token=++R.token;
   Object.assign(R, {game:g, an:new Array(g.fens.length).fill(null), res:[], exp:[], cur:0, analyzing:true});
+  R.v=null; $('#varBar').classList.add('hidden'); document.body.classList.remove('in-var'); delete document.body.dataset.analysis;
   R.userColor = userColorFor(g.headers);
   R.flip = R.userColor==='b';
   const op = detectOpening(g.moves.map(m=>m.san));
   R.opening = op; R.bookLen = op ? op.moves.length : 0;
   ['#explainCard','#graphCard','#progressCard'].forEach(s=>$(s).classList.remove('hidden')); document.body.classList.add('has-game');
   $('#summaryCard').classList.add('hidden');
-  $('#openingName').innerHTML = op ? `📖 ${op.he} <span class="muted">(${op.en})</span>` : (g.headers.Opening ? '📖 '+esc(g.headers.Opening) : '');
+  R.openingHtml = op ? `📖 ${op.he} <span class="muted">(${op.en})</span>` : (g.headers.Opening ? '📖 '+esc(g.headers.Opening) : '');
+  $('#openingName').innerHTML = R.openingHtml;
   renderMoves(); renderReview();
   const depth=+$('#depthSel').value; const N=g.fens.length; const t0=performance.now();
   for(let i=0;i<N;i++){
@@ -203,7 +411,7 @@ function computeMove(k){
   res.phase = phaseOf(mv.fenBefore, k);
   R.res[k]=res; R.exp[k]=explainMove(mv, R.an[k], R.an[k+1], res, R.opening);
 }
-function goto(i, fromAuto){ if(!R.game) return; if(!fromAuto) stopAuto(); const prev=R.cur; R.cur=Math.max(0, Math.min(R.game.fens.length-1, i)); renderReview(); if(!fromAuto && R.cur!==prev) narrateReview(R.cur); }
+function goto(i, fromAuto){ if(!R.game) return; if(R.v) exitVariation(false); if(!fromAuto) stopAuto(); const prev=R.cur; R.cur=Math.max(0, Math.min(R.game.fens.length-1, i)); renderReview(); if(!fromAuto && R.cur!==prev) narrateReview(R.cur); }
 
 function playerLabel(color){
   const h=R.game?R.game.headers:{}; const name = color==='w'?(h.White||'לבן'):(h.Black||'שחור'); const elo = color==='w'?h.WhiteElo:h.BlackElo;
@@ -212,7 +420,9 @@ function playerLabel(color){
 }
 function renderReview(){
   if(currentTab!=='review') return;
-  const g=R.game; if(!g){ board.set({fen:new Chess().fen(), hl:[], arrows:[], badge:null, flip:R.flip}); setEvalBar(50,'0.0',R.flip); return; }
+  const g=R.game; if(!g){ board.set({fen:new Chess().fen(), hl:[], arrows:[], badge:null, flip:R.flip}); setEvalBar(50,'0.0',R.flip); renderMaterial(null, [], new Chess().fen(), R.flip?'w':'b'); return; }
+  if(R.v) return renderVariation();
+  $('#openingName').innerHTML = R.openingHtml;
   const i=R.cur; const fen=g.fens[i];
   const mv=i>0?g.moves[i-1]:null; const res=i>0?R.res[i-1]:null;
   const arrows=[];
@@ -222,6 +432,7 @@ function renderReview(){
   board.set({fen, flip:R.flip, hl: mv?[mv.from,mv.to]:[], arrows, check:chk, badge: res?{sq:mv.to, sym:CLS[res.cls].sym, color:CLS[res.cls].hex}:null});
   const an=R.an[i]; if(an) setEvalBar(wpWhite(an), shortEval(an.lines[0], an.stm), R.flip); 
   $('#topPlayer').innerHTML=playerLabel(R.flip?'w':'b'); $('#botPlayer').innerHTML=playerLabel(R.flip?'b':'w');
+  renderMaterial(g.startFen, g.moves.slice(0,i), fen, R.flip?'w':'b');
   // explanation
   const box=$('#explainBox');
   if(!mv){ box.innerHTML = `<div class="head">♟️ עמדת הפתיחה</div><div class="muted">השתמש בחצים ← → או לחץ על מהלך כדי לעבור על המשחק. ${R.analyzing?'הניתוח רץ ברקע…':'הסיכום המלא נמצא למטה.'}</div>`; }
@@ -231,6 +442,11 @@ function renderReview(){
     box.innerHTML = `<div class="head">${ci(res.cls)}<span>${san(moveNo(i-1)+mv.san)} – ${CLS[res.cls].he}</span></div>
       <ul>${e.html.map(x=>`<li>${x}</li>`).join('')}</ul>
       <div class="evalline">הערכה: ${san(evalText(anB.lines[0], anB.stm))} ← לפני · אחרי → ${san(evalText(anA.lines[0], anA.stm))} · דיוק המהלך: ${Math.round(res.acc)}%</div>`;
+    const bu=anB.lines[0].pv && anB.lines[0].pv[0];
+    if(['inaccuracy','mistake','blunder','miss'].includes(res.cls) && bu && bu!==mv.uci){
+      box.innerHTML += `<button class="btn primary fixbtn" id="fixBtn" title="הצג את המהלך הטוב יותר על הלוח, עם הסבר, והמשך לשחק ממנו">🔧 תקן את המהלך</button>`;
+      $('#fixBtn').onclick=()=>fixMove(i-1);
+    }
   }
   $$('.mv').forEach(el=>el.classList.toggle('cur', +el.dataset.ply===i));
   const cur=$('.mv.cur'); if(cur){ const box2=$('#movesBox'); const r1=cur.getBoundingClientRect(), r2=box2.getBoundingClientRect(); if(r1.top<r2.top||r1.bottom>r2.bottom) box2.scrollTop += r1.top-r2.top-box2.clientHeight/2; }
