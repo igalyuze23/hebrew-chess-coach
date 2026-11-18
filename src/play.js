@@ -14,6 +14,7 @@ function renderLevels(){
 function coachSay(html){ $('#coachMsg').innerHTML=html; }
 function renderPlay(){
   if(currentTab!=='play') return;
+  if(PVPreview.active){ renderLinePreview(); return; }
   const c=P.chess; const fen=c.fen(); const h=c.history({verbose:true}); const last=h[h.length-1];
   let chk=null; if(c.in_check()){ const b=parseFen(fen); chk=Object.keys(b).find(s=>b[s].type==='k'&&b[s].color===c.turn()); }
   const arrows=[]; if(P.hintStage===2 && P.hintMove) arrows.push({from:P.hintMove.slice(0,2), to:P.hintMove.slice(2,4), color:'#4aa3ff'});
@@ -26,11 +27,13 @@ function renderPlay(){
   const userBottom = (P.userColor==='w') !== P.flip;
   $('#topPlayer').innerHTML = userBottom?bot:me; $('#botPlayer').innerHTML = userBottom?me:bot;
   renderMaterial(null, h, fen, userBottom ? other(P.userColor) : P.userColor);
+  renderPlayMpv();
   // move list
   let t='<table>'; for(let k=0;k<h.length;k+=2){ const cell=j=>{ if(j>=h.length) return '<td></td>'; const r=P.history[j]; return `<td><span class="mv">${r&&r.res?ci(r.res.cls):''}${h[j].san}</span></td>`; }; t+=`<tr><td class="no">${k/2+1}.</td>${cell(k)}${cell(k+1)}</tr>`; }
   $('#playMoves').innerHTML=t+'</table>'; $('#playMoves').scrollTop=1e6;
 }
 function newPlayGame(){
+  if(PVPreview.active) exitLinePreview(false);
   const sel=$('#colorSeg .on').dataset.c; P.userColor = sel==='r' ? (Math.random()<.5?'w':'b') : sel;
   Object.assign(P,{chess:new Chess(), flip:P.userColor==='b', lastEval:null, hintStage:0, hintMove:null, lastUser:null, history:[], over:false, thinking:false});
   getOpp().newGame(); coach.cancel();
@@ -40,7 +43,7 @@ function newPlayGame(){
 async function botMove(){
   if(P.over) return; P.thinking=true; renderPlay(); const lvl=LEVELS[P.level];
   const fenAtStart=P.chess.fen();
-  const r=await getOpp().search(fenAtStart, {depth:lvl.depth, movetime:lvl.mt, skill:lvl.skill});
+  const r=await getOpp().search(fenAtStart, {depth:lvl.depth, movetime:lvl.mt, skill:lvl.skill, multipv:1});
   P.thinking=false;
   if(!r || P.chess.fen()!==fenAtStart || !r.bestmove || r.bestmove==='(none)') { renderPlay(); return; }
   const m=mvFromUci(P.chess, r.bestmove); P.history.push({mv:m}); say(endDot('המאמן משחק: '+spSan(m.san)), {interrupt:false});
@@ -54,7 +57,7 @@ function checkOver(){
   coachSay(msg); toast(msg, 5000); say(msg.replace(/[🎉😔]/gu,'').split('לחץ')[0], {interrupt:false}); return true;
 }
 async function userMove(from, to){
-  if(P.over || P.thinking || P.chess.turn()!==P.userColor) return;
+  if(PVPreview.active || P.over || P.thinking || P.chess.turn()!==P.userColor) return;
   const fenBefore=P.chess.fen();
   const m=P.chess.move({from, to, promotion:'q'}); if(!m) return;
   const mv={san:m.san, uci:m.from+m.to+(m.promotion||''), from:m.from, to:m.to, color:m.color, piece:m.piece, captured:m.captured, flags:m.flags, fenBefore, fenAfter:P.chess.fen()};
@@ -68,8 +71,8 @@ async function userMove(from, to){
 }
 async function evaluateUserMove(entry){
   const mv=entry.mv; const ply=entry.ply;
-  const anB = terminalInfo(mv.fenBefore) || await coach.search(mv.fenBefore, {depth:12, multipv:2});
-  const anA = terminalInfo(mv.fenAfter) || await coach.search(mv.fenAfter, {depth:12});
+  const anB = terminalInfo(mv.fenBefore) || await coach.search(mv.fenBefore, {depth:12, multipv:MULTI_PV});
+  const anA = terminalInfo(mv.fenAfter) || await coach.search(mv.fenAfter, {depth:12, multipv:1});
   if(!anB || !anA) return;
   const sans=P.chess.history(); const op=detectOpening(sans.slice(0,ply+1));
   const prev = P.history[ply-1];
@@ -89,10 +92,11 @@ function showWhy(){
   coachSay(`<div class="explain"><div class="head">${ci(e.res.cls)}<span>${san(e.mv.san)} – ${CLS[e.res.cls].he}</span></div><ul>${e.exp.html.map(x=>`<li>${x}</li>`).join('')}</ul><div class="evalline">הערכה אחרי המהלך: ${san(evalText(e.anA.lines[0], e.anA.stm))}</div></div>`);
 }
 async function hint(){
+  if(PVPreview.active) return;
   if(P.over || P.chess.turn()!==P.userColor){ coachSay('חכה לתורך 🙂'); return; }
   if(P.hintStage===0 || !P.hintMove){
     coachSay('<span class="muted">חושב על רמז…</span>'); const fen=P.chess.fen();
-    const r=await coach.search(fen, {depth:12}); if(!r || P.chess.fen()!==fen) return;
+    const r=await coach.search(fen, {depth:12, multipv:1}); if(!r || P.chess.fen()!==fen) return;
     P.hintMove=r.lines[0].pv[0]; P.hintStage=1;
     const b=parseFen(fen); const p=b[P.hintMove.slice(0,2)]; const m=uciToMove(fen,P.hintMove);
     let extra=''; if(r.lines[0].mate>0) extra=` יש כאן <b>מט ב-${r.lines[0].mate}</b>!`; else if(m.captured) extra=' חפש לקיחה.'; else if(m.san.includes('+')) extra=' חפש שח.';
@@ -101,6 +105,7 @@ async function hint(){
   renderPlay();
 }
 function undo(){
+  if(PVPreview.active){ toast('לחץ על "חזור למשחק" לפני ביטול מהלך'); return; }
   if(P.thinking) return; coach.cancel();
   const h=P.chess.history(); if(!h.length) return;
   P.chess.undo(); P.history.pop(); if(P.chess.turn()!==P.userColor && P.chess.history().length){ P.chess.undo(); P.history.pop(); }
@@ -110,7 +115,33 @@ function undo(){
 
 /* ================= App init ================= */
 let currentTab='review';
+function renderPlayMpv(){
+  const box=$('#playMpv'); if(!box) return;
+  const e=P.lastUser;
+  if(!e || !e.mv){ box.innerHTML=''; return; }
+  if(!e.anB){ box.innerHTML='<div class="mpv"><div class="mpv-h"><span>המהלכים המובילים</span></div><div class="small muted" style="padding:2px 10px 8px">המנוע מחשב…</div></div>'; return; }
+  let h=mpvHtml(e.mv.fenBefore, e.anB, {title:'המהלכים המובילים בעמדה שלך'});
+  const pv=e.anB.lines && e.anB.lines[0] && e.anB.lines[0].pv;
+  if(e.res && isWeakCls(e.res.cls) && pv && pv[0] && pv[0]!==e.mv.uci){
+    h+=`<div class="fixrow"><button class="btn" id="playPvBtn">הראה המשך מומלץ</button></div>`;
+  }
+  box.innerHTML=h;
+  const b=$('#playPvBtn'); if(b) b.onclick=()=>previewPlayLine(e);
+}
+function previewPlayLine(e){
+  if(!e || !e.anB || !e.anB.lines || !e.anB.lines[0] || !e.anB.lines[0].pv) return;
+  const pv=e.anB.lines[0].pv;
+  const hist=P.chess.history({verbose:true});
+  const before=hist.slice(0, e.ply).map(m=>({from:m.from, to:m.to, color:m.color, captured:m.captured, promotion:m.promotion, uci:m.from+m.to+(m.promotion||'')}));
+  const userBottom=(P.userColor==='w')!==P.flip;
+  enterLinePreview({
+    fen:e.mv.fenBefore, pv, movesBefore:before, startFen:null,
+    topColor:userBottom ? other(P.userColor) : P.userColor, flip:P.flip, title:'המשך מומלץ',
+    scoreText:shortEval(e.anB.lines[0], e.anB.stm), wp:wpWhite(e.anB),
+  });
+}
 function setTab(t){
+  if(PVPreview.active) exitLinePreview(false);
   currentTab=t; $('#tabReview').classList.toggle('on',t==='review'); $('#tabPlay').classList.toggle('on',t==='play');
   $('#reviewPanel').classList.toggle('hidden',t!=='review'); $('#playPanel').classList.toggle('hidden',t!=='play');
   $('#reviewNav').classList.toggle('hidden',t!=='review'); $('#playNav').classList.toggle('hidden',t!=='play');
@@ -120,7 +151,7 @@ function setTab(t){
 }
 function init(){
   board=new BoardUI($('#board'), {
-    interactive:()=> currentTab==='play' ? (!P.over && !P.thinking && P.chess.turn()===P.userColor) : (!!R.game && !NAR.auto && !new Chess(reviewFen()).game_over()),
+    interactive:()=> PVPreview.active ? false : currentTab==='play' ? (!P.over && !P.thinking && P.chess.turn()===P.userColor) : (!!R.game && !NAR.auto && !new Chess(reviewFen()).game_over()),
     canPick:c=> currentTab==='play' ? c===P.userColor : c===reviewFen().split(' ')[1],
     targets:sq=> currentTab==='play' ? P.chess.moves({square:sq, verbose:true}).map(m=>m.to) : new Chess(reviewFen()).moves({square:sq, verbose:true}).map(m=>m.to),
     onMove:(f,t)=> currentTab==='play' ? userMove(f,t) : reviewUserMove(f,t),
@@ -136,10 +167,20 @@ function init(){
   $('#sampleBtn').onclick=()=>{ $('#pgnInput').value=SAMPLE_PGN; startReview(SAMPLE_PGN); };
   $('#stopBtn').onclick=()=>{ R.token++; coach.cancel(); R.analyzing=false; $('#progressCard').classList.add('hidden'); renderMoves(); renderGraph(); if(R.res.filter(Boolean).length) renderSummary(); };
   $('#navFirst').onclick=()=>navTo('first'); $('#navLast').onclick=()=>navTo('last'); $('#navPrev').onclick=()=>navTo('prev'); $('#navNext').onclick=()=>navTo('next');
+  $('#pvPrevBtn').onclick=()=>stepLinePreview(-1); $('#pvNextBtn').onclick=()=>stepLinePreview(1); $('#pvBackBtn').onclick=()=>exitLinePreview();
   $('#varBackBtn').onclick=()=>exitVariation(); $('#varEngineBtn').onclick=varEngineMove;
   $('#navFlip').onclick=()=>{ R.flip=!R.flip; renderReview(); };
-  $('#graph').addEventListener('click', e=>{ if(!R.game) return; const r=e.currentTarget.getBoundingClientRect(); goto(Math.round((e.clientX-r.left)/r.width*(R.game.fens.length-1))); });
-  document.addEventListener('keydown', e=>{ if(currentTab!=='review' || /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+  $('#graph').addEventListener('click', e=>{ if(PVPreview.active){ toast('לחץ על "חזור למשחק" כדי לנווט במשחק'); return; } if(!R.game) return; const r=e.currentTarget.getBoundingClientRect(); goto(Math.round((e.clientX-r.left)/r.width*(R.game.fens.length-1))); });
+  document.addEventListener('keydown', e=>{ if(/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+    if(PVPreview.active){
+      if(e.key==='ArrowRight'||e.key==='ArrowDown'){ stepLinePreview(1); e.preventDefault(); }
+      else if(e.key==='ArrowLeft'||e.key==='ArrowUp'){ stepLinePreview(-1); e.preventDefault(); }
+      else if(e.key==='Home'){ stepLinePreview(-999); e.preventDefault(); }
+      else if(e.key==='End'){ stepLinePreview(999); e.preventDefault(); }
+      else if(e.key==='Escape'){ exitLinePreview(); e.preventDefault(); }
+      return;
+    }
+    if(currentTab!=='review') return;
     if(e.key==='ArrowRight'){ navTo('next'); e.preventDefault(); } else if(e.key==='ArrowLeft'){ navTo('prev'); e.preventDefault(); }
     else if(e.key==='ArrowUp'||e.key==='Home'){ navTo('first'); e.preventDefault(); } else if(e.key==='ArrowDown'||e.key==='End'){ navTo('last'); e.preventDefault(); }
     else if(e.key==='Escape' && R.v){ exitVariation(); e.preventDefault(); } });

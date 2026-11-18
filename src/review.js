@@ -13,6 +13,50 @@ const CLS = {
 };
 const CLS_ORDER=['brilliant','great','best','excellent','good','book','inaccuracy','mistake','miss','blunder'];
 const ci = k => `<span class="ci" style="background:${CLS[k].hex}">${CLS[k].sym}</span>`;
+const MULTI_PV = 3;
+const WEAK_CLS = {inaccuracy:1, mistake:1, blunder:1, miss:1};
+function isWeakCls(k){ return !!WEAK_CLS[k]; }
+const MPV_ARROW = [
+  {color:'#81b64c', w:22, op:.95},
+  {color:'#4aa3ff', w:14, op:.75},
+  {color:'#e6a23c', w:11, op:.68},
+];
+function mpvArrows(an){
+  const lines=(an && an.lines || []).filter(l => l && l.pv && l.pv[0] && l.pv[0].length>=4).slice(0, 3);
+  const arrows=[];
+  for(let i=lines.length-1;i>=0;i--){
+    const u=lines[i].pv[0], st=MPV_ARROW[i]||MPV_ARROW[2];
+    arrows.push({from:u.slice(0,2), to:u.slice(2,4), color:st.color, w:st.w, op:st.op});
+  }
+  return arrows;
+}
+/* One green arrow for a move that wasn't best (existing teaching arrow). Otherwise the top 3 of the position on the board, best drawn last. */
+function positionArrows(anNow, anBefore, mv, res){
+  if(mv && res && !res.isBest && res.cls!=='book' && anBefore && anBefore.lines && anBefore.lines[0] && anBefore.lines[0].pv && anBefore.lines[0].pv[0]){
+    const bu=anBefore.lines[0].pv[0];
+    return [{from:bu.slice(0,2), to:bu.slice(2,4), color:'#81b64c', w:20, op:.9}];
+  }
+  if(!anNow || anNow.terminal) return [];
+  return mpvArrows(anNow);
+}
+function mpvHtml(fen, an, opts){
+  opts=opts||{};
+  if(an && an.terminal) return '';
+  const lines = an && an.lines ? an.lines.filter(l => l && l.pv && l.pv.length).slice(0, 3) : [];
+  const title = opts.title || (lines.length>=3 ? 'שלושת המהלכים המובילים' : 'המהלכים המובילים');
+  if(!lines.length){
+    if(!opts.pending) return '';
+    return `<div class="mpv"><div class="mpv-h"><span>${title}</span></div><div class="small muted" style="padding:2px 10px 8px">המנוע מחשב…</div></div>`;
+  }
+  const who = fen.split(' ')[1]==='w' ? 'הלבן לשחק' : 'השחור לשחק';
+  const items = lines.map((l,i)=>{
+    const sc=stmEvalText(l);
+    const cls = l.mate!=null ? (l.mate>0?'pos':'neg') : (l.cp>0?'pos':l.cp<0?'neg':'');
+    const more = l.pv.length>8 ? ' …' : '';
+    return `<li class="r${i+1}"><span class="rk">${i+1}</span><bdi class="sc ${cls}">${esc(sc)}</bdi><span class="pv">${esc(pvPlain(fen, l.pv, 8)+more)}</span></li>`;
+  }).join('');
+  return `<div class="mpv"><div class="mpv-h"><span>${esc(title)}</span><span class="muted small">${who}</span></div><ol>${items}</ol></div>`;
+}
 
 function povText(l, sign){ if(l.terminal==='mate') return sign>0?'מט':'מט'; if(l.mate!=null) return (l.mate*sign>0?'M':'-M')+Math.abs(l.mate); const v=l.cp*sign/100; return (v>0?'+':'')+v.toFixed(1); }
 function gv(t,m,f){ return t==='q'?f:m; }
@@ -254,9 +298,11 @@ function exitVariation(render=true){
   if(render){ renderReview(); if(NAR.on) say('חזרה לניתוח המשחק.'); }
 }
 function fixMove(k){
+  if(PVPreview.active) return;
   const g=R.game; const mv=g.moves[k]; const res=R.res[k]; if(!mv || !res) return;
   const f=explainFix(mv, R.an[k], R.an[k+1], res); if(!f){ toast('אין מהלך טוב יותר להצגה'); return; }
-  startVariation(k, {retCur:R.cur, title:`תיקון של ${san(moveNo(k)+mv.san)}`, fix:{k, html:f.html, played:mv}});
+  const pv=(R.an[k] && R.an[k].lines[0] && R.an[k].lines[0].pv || []).slice();
+  startVariation(k, {retCur:R.cur, title:`תיקון של ${san(moveNo(k)+mv.san)}`, fix:{k, html:f.html, played:mv, pv, fen:g.fens[k]}});
   varPush(f.best);
   renderReview();
   if(innerWidth<900) window.scrollTo({top:0, behavior:'smooth'});
@@ -276,7 +322,7 @@ function varPush(m){
 async function varAnalyze(j){
   const v=R.v; if(!v || v.an[j]) return; const fen=v.fens[j]; if(!fen) return;
   if(v.pending && v.pending[fen]) return; v.pending=v.pending||{}; v.pending[fen]=true;
-  let an=terminalInfo(fen); if(!an) an=await coach.search(fen, {depth:12, multipv:2});
+  let an=terminalInfo(fen); if(!an) an=await coach.search(fen, {depth:12, multipv:MULTI_PV});
   if(v.pending) delete v.pending[fen];
   if(R.v!==v || v.fens[j]!==fen || !an) return;
   v.an[j]=an; varCompute(j-1); varCompute(j);
@@ -296,13 +342,13 @@ function varMoveNo(v, k){ // SAN number for variation move k
 async function varEngineMove(){
   const v=R.v; if(!v) return; const j=v.cur; const fen=v.fens[j];
   if(new Chess(fen).game_over()){ toast('המשחק בעמדה הזו נגמר'); return; }
-  let an=v.an[j]; if(!an){ toast('המנוע חושב…', 1500); an=await coach.search(fen, {depth:12, multipv:2}); if(R.v!==v || v.fens[j]!==fen || !an) return; v.an[j]=an; }
+  let an=v.an[j]; if(!an){ toast('המנוע חושב…', 1500); an=await coach.search(fen, {depth:12, multipv:1}); if(R.v!==v || v.fens[j]!==fen || !an) return; v.an[j]=an; }
   const u=an.lines[0] && an.lines[0].pv && an.lines[0].pv[0]; if(!u) return;
   v.cur=j; const m=varPush(u); if(m && NAR.on) say('המנוע משחק: '+spSan(m.san));
   renderReview();
 }
 function reviewUserMove(from, to){
-  if(!R.game) return;
+  if(PVPreview.active || !R.game) return;
   if(!R.v) startVariation(R.cur, {retCur:R.cur, title:`וריאציה חופשית מ-${R.cur?san(moveNo(R.cur-1)+R.game.moves[R.cur-1].san):'עמדת הפתיחה'}`});
   const m=varPush({from, to, promotion:'q'}); if(!m) return;
   if(NAR.on) say(spSan(m.san));
@@ -310,6 +356,13 @@ function reviewUserMove(from, to){
 }
 function reviewFen(){ if(!R.game) return null; return R.v ? R.v.fens[R.v.cur] : R.game.fens[R.cur]; }
 function navTo(where){
+  if(PVPreview.active){
+    if(where==='next') stepLinePreview(1);
+    else if(where==='prev') stepLinePreview(-1);
+    else if(where==='first') stepLinePreview(-999);
+    else stepLinePreview(999);
+    return;
+  }
   if(R.v){ const v=R.v; varGoto(where==='first'?0: where==='last'?1e9 : where==='prev'? v.cur-1 : v.cur+1); return; }
   goto(where==='first'?0: where==='last'?1e9 : where==='prev'? R.cur-1 : R.cur+1);
 }
@@ -318,8 +371,7 @@ function renderVariation(){
   const mv=i>0?v.moves[i-1]:null; const isFix = v.fix && i===1; const res = i>0 && !isFix ? v.res[i-1] : null;
   const arrows=[];
   if(i===0 && v.fix){ const b=v.moves[0]; if(b) arrows.push({from:b.from, to:b.to, color:'#81b64c'}); const p=v.fix.played; arrows.push({from:p.from, to:p.to, color:'#ca3431', w:12, op:.55}); }
-  else if(mv && res && !res.isBest && v.an[i-1]){ const bu=v.an[i-1].lines[0].pv && v.an[i-1].lines[0].pv[0]; if(bu) arrows.push({from:bu.slice(0,2), to:bu.slice(2,4), color:'#81b64c'}); }
-  else if(v.an[i] && v.an[i].lines[0].pv && v.an[i].lines[0].pv[0]){ const bu=v.an[i].lines[0].pv[0]; arrows.push({from:bu.slice(0,2), to:bu.slice(2,4), color:'#4aa3ff', w:12, op:.6}); }
+  else arrows.push(...positionArrows(v.an[i], i>0?v.an[i-1]:null, mv, res));
   const c=new Chess(fen); let chk=null; if(c.in_check()){ const b=parseFen(fen); chk=Object.keys(b).find(s=>b[s].type==='k'&&b[s].color===c.turn()); }
   const badge = isFix ? {sq:mv.to, sym:'★', color:CLS.best.hex} : (res ? {sq:mv.to, sym:CLS[res.cls].sym, color:CLS[res.cls].hex} : null);
   board.set({fen, flip:R.flip, hl: mv?[mv.from,mv.to]:[], arrows, check:chk, badge});
@@ -344,6 +396,8 @@ function renderVariation(){
   }
   if(c.in_checkmate()) body += `<div class="varnote"><b>מט!</b> הווריאציה הסתיימה.</div>`;
   else if(c.game_over()) body += `<div class="varnote">תיקו – הווריאציה הסתיימה.</div>`;
+  body += mpvHtml(fen, v.an[i], {pending:!v.an[i]});
+  if(v.fix && v.fix.pv && v.fix.pv.length) body += `<div class="fixrow"><button class="btn" id="lineBtn">הראה המשך מומלץ</button></div>`;
   // variation move list
   let ml=''; v.moves.forEach((m,k)=>{ const fen0=v.fens[k]; const w=fen0.split(' ')[1]==='w';
     if(w || k===0) ml+=`<span class="vno">${varMoveNo(v,k).trim()}</span>`;
@@ -351,13 +405,108 @@ function renderVariation(){
     ml+=`<span class="vm${isF?' fix':''}${k+1===i?' cur':''}" data-k="${k+1}">${isF?ci('best'):(r?ci(r.cls):'')}${m.san}</span> `; });
   const head = `<div class="opening">🔀 ${v.title} · <a href="#" id="varBackLink">חזרה לניתוח המשחק</a></div>`;
   $('#explainBox').innerHTML = body + `<div class="varmoves" id="varMoves">${ml || '<span class="muted">…</span>'}</div>
-    <div class="varnote">אפשר להמשיך לשחק מכאן בשני הצדדים (גרור או לחץ על כלי), ללחוץ "🤖 תשובת המנוע", או לעבור בין המהלכים בחצים.</div>
+    <div class="varnote">אפשר להמשיך לשחק מכאן בשני הצדדים (גרור או לחץ על כלי), ללחוץ "🤖 תשובת המנוע", או לעבור בין המהלכים בחצים.${v.fix&&v.fix.pv&&v.fix.pv.length?' "הראה המשך מומלץ" מדפדף בקו המנוע, ו"חזור למשחק" מחזיר לוריאציה הזו.':''}</div>
 `;
   $('#openingName').innerHTML = head;
   $$('#varMoves .vm').forEach(el=>el.onclick=()=>varGoto(+el.dataset.k));
+  const lineBtn=$('#lineBtn'); if(lineBtn) lineBtn.onclick=()=>previewFixLine();
   $('#varBackLink').onclick=e=>{ e.preventDefault(); exitVariation(); };
   $$('.mv').forEach(el=>el.classList.toggle('cur', +el.dataset.ply===v.base+(v.fix?1:0)));
   renderGraphCursor();
+}
+
+/* ================= Read-only PV preview ================= */
+// Does not touch R.cur, R.v, or the live game. Exit redraws whatever was on the board.
+const PVPreview = {active:false};
+const PREVIEW_LOCK = ['navFirst','navPrev','navNext','navLast','navFlip','hintBtn','undoBtn','whyBtn','playFlip','autoBtn','varEngineBtn','varBackBtn'];
+function setPreviewLocks(on){ PREVIEW_LOCK.forEach(id=>{ const b=$('#'+id); if(b) b.disabled=!!on; }); }
+function enterLinePreview(opts){
+  const line=buildLine(opts.fen, opts.pv);
+  if(!line.moves.length){ toast('אין המשך להצגה'); return; }
+  if(typeof stopAuto==='function') stopAuto();
+  board.clearSel();
+  Object.assign(PVPreview, {
+    active:true, idx:Math.min(1, line.fens.length-1), fens:line.fens, moves:line.moves,
+    movesBefore:opts.movesBefore||[], startFen:opts.startFen||null, topColor:opts.topColor,
+    flip:!!opts.flip, title:opts.title||'המשך מומלץ', scoreText:opts.scoreText||'', wp:opts.wp,
+    tab:currentTab,
+  });
+  document.body.classList.add('in-preview');
+  $('#pvBar').classList.remove('hidden');
+  setPreviewLocks(true);
+  renderLinePreview();
+  if(innerWidth<900) window.scrollTo({top:0, behavior:'smooth'});
+  if(typeof NAR!=='undefined' && NAR.on && typeof say==='function') say('המשך מומלץ. אפשר לדפדף עם הבא והקודם.');
+}
+function exitLinePreview(render=true){
+  if(!PVPreview.active) return;
+  PVPreview.active=false;
+  document.body.classList.remove('in-preview');
+  $('#pvBar').classList.add('hidden');
+  setPreviewLocks(false);
+  board.clearSel();
+  if(!render) return;
+  if(currentTab==='review') renderReview(); else if(typeof renderPlay==='function') renderPlay();
+}
+function stepLinePreview(d){
+  if(!PVPreview.active) return;
+  const max=PVPreview.fens.length-1;
+  PVPreview.idx=Math.max(0, Math.min(max, PVPreview.idx+d));
+  renderLinePreview();
+}
+function renderLinePreview(){
+  const S=PVPreview; if(!S.active) return;
+  const i=S.idx, fen=S.fens[i], mv=i>0?S.moves[i-1]:null;
+  const c=new Chess(fen); let chk=null;
+  if(c.in_check()){ const b=parseFen(fen); chk=Object.keys(b).find(s=>b[s].type==='k'&&b[s].color===c.turn()); }
+  const arrows=[];
+  if(i<S.moves.length){ const nx=S.moves[i]; arrows.push({from:nx.from, to:nx.to, color:'#81b64c', w:18, op:.8}); }
+  board.set({fen, flip:S.flip, hl:mv?[mv.from,mv.to]:[], arrows, check:chk, badge:mv?{sq:mv.to, sym:'★', color:CLS.best.hex}:null, sel:null, dots:[], hint:null});
+  if(S.wp!=null) setEvalBar(S.wp, S.scoreText||'', S.flip);
+  if(S.tab==='review' && R.game){
+    $('#topPlayer').innerHTML=playerLabel(S.flip?'w':'b');
+    $('#botPlayer').innerHTML=playerLabel(S.flip?'b':'w');
+  } else if(S.tab==='play' && typeof LEVELS!=='undefined'){
+    const lvl=LEVELS[P.level];
+    const me=`<span class="sw" style="background:${P.userColor==='w'?'#fff':'#222'}"></span><b>אתה</b>`;
+    const bot=`<span class="sw" style="background:${P.userColor==='w'?'#222':'#fff'}"></span><b>המאמן</b> <span class="muted">(רמה ${P.level+1}, <bdi dir="ltr">${lvl.elo}</bdi>)</span>${P.thinking?' <span class="muted small">חושב…</span>':''}`;
+    const userBottom=(P.userColor==='w')!==P.flip;
+    $('#topPlayer').innerHTML=userBottom?bot:me; $('#botPlayer').innerHTML=userBottom?me:bot;
+  }
+  renderMaterial(S.startFen, S.movesBefore.concat(S.moves.slice(0, i)), fen, S.topColor);
+  const n=S.fens.length-1;
+  $('#pvTitle').textContent=S.title;
+  $('#pvScore').textContent=S.scoreText||'';
+  $('#pvPrevBtn').disabled=i<=0;
+  $('#pvNextBtn').disabled=i>=n;
+  $('#pvCount').innerHTML=i===0?'עמדת המוצא':`<bdi class="san">${esc(mv.san)}</bdi> · ${i}/${n}`;
+  if(currentTab==='review'){
+    const bits=S.moves.map((m,k)=>`<span class="vm${k+1===i?' cur':''}" data-k="${k+1}">${esc(m.san)}</span>`).join(' ');
+    $('#openingName').innerHTML='המשך מומלץ · תצוגה בלבד';
+    $('#explainBox').innerHTML=`<div class="head">המשך מומלץ</div>
+      <div class="muted">הלוח מציג את קו המנוע בלבד, והמהלכים הרגילים מושבתים. ${S.scoreText?`הערכת הקו: <bdi class="san">${esc(S.scoreText)}</bdi>. `:''}"חזור למשחק" מחזיר את הלוח בדיוק למצב הקודם.</div>
+      <div class="varmoves" id="pvMoves">${bits}</div>
+      <div class="varnote">הקודם והבא מדפדפים בהמשך. אפשר גם עם החצים במקלדת.</div>`;
+    $$('#pvMoves .vm').forEach(el=>el.onclick=()=>{ S.idx=+el.dataset.k; renderLinePreview(); });
+  }
+}
+function previewBestLine(k){
+  const g=R.game, an=R.an[k]; if(!g||!an||!an.lines||!an.lines[0]) return;
+  const pv=an.lines[0].pv; if(!pv||!pv.length){ toast('אין המשך להצגה'); return; }
+  enterLinePreview({
+    fen:g.fens[k], pv, movesBefore:g.moves.slice(0,k), startFen:g.startFen,
+    topColor:R.flip?'w':'b', flip:R.flip, title:'המשך מומלץ',
+    scoreText:shortEval(an.lines[0], an.stm), wp:wpWhite(an),
+  });
+}
+function previewFixLine(){
+  const v=R.v; if(!v||!v.fix||!v.fix.pv||!v.fix.pv.length) return;
+  const g=R.game, an=R.an[v.fix.k];
+  enterLinePreview({
+    fen:v.fix.fen||g.fens[v.fix.k], pv:v.fix.pv, movesBefore:g.moves.slice(0, v.fix.k), startFen:g.startFen,
+    topColor:R.flip?'w':'b', flip:R.flip, title:'המשך מומלץ',
+    scoreText:an?shortEval(an.lines[0], an.stm):'', wp:an?wpWhite(an):null,
+  });
 }
 
 /* ================= Review state & UI ================= */
@@ -373,6 +522,7 @@ function userColorFor(headers){
 
 async function startReview(pgn){
   let g; try{ g=gameFromPgn(pgn); }catch(e){ $('#importMsg').innerHTML='<span style="color:#ff8a87">'+esc(e.message)+'</span>'; return; }
+  if(PVPreview.active) exitLinePreview(false);
   if(coach) coach.cancel(); stopAuto();
   const token=++R.token;
   Object.assign(R, {game:g, an:new Array(g.fens.length).fill(null), res:[], exp:[], cur:0, analyzing:true});
@@ -386,12 +536,12 @@ async function startReview(pgn){
   R.openingHtml = op ? `📖 ${op.he} <span class="muted">(${op.en})</span>` : (g.headers.Opening ? '📖 '+esc(g.headers.Opening) : '');
   $('#openingName').innerHTML = R.openingHtml;
   renderMoves(); renderReview();
-  const depth=+$('#depthSel').value; const N=g.fens.length; const t0=performance.now();
+  const depth=Math.min(30, Math.max(1, +$('#depthSel').value || 14)); const N=g.fens.length; const t0=performance.now();
   for(let i=0;i<N;i++){
     if(token!==R.token) return;
     const fen=g.fens[i];
     let an = terminalInfo(fen);
-    if(!an){ an = await coach.search(fen, {depth, multipv:2}); }
+    if(!an){ an = await coach.search(fen, {depth, multipv:MULTI_PV}); }
     if(token!==R.token || !an) return;
     R.an[i]=an;
     if(i>0) computeMove(i-1);
@@ -411,7 +561,7 @@ function computeMove(k){
   res.phase = phaseOf(mv.fenBefore, k);
   R.res[k]=res; R.exp[k]=explainMove(mv, R.an[k], R.an[k+1], res, R.opening);
 }
-function goto(i, fromAuto){ if(!R.game) return; if(R.v) exitVariation(false); if(!fromAuto) stopAuto(); const prev=R.cur; R.cur=Math.max(0, Math.min(R.game.fens.length-1, i)); renderReview(); if(!fromAuto && R.cur!==prev) narrateReview(R.cur); }
+function goto(i, fromAuto){ if(!R.game || PVPreview.active) return; if(R.v) exitVariation(false); if(!fromAuto) stopAuto(); const prev=R.cur; R.cur=Math.max(0, Math.min(R.game.fens.length-1, i)); renderReview(); if(!fromAuto && R.cur!==prev) narrateReview(R.cur); }
 
 function playerLabel(color){
   const h=R.game?R.game.headers:{}; const name = color==='w'?(h.White||'לבן'):(h.Black||'שחור'); const elo = color==='w'?h.WhiteElo:h.BlackElo;
@@ -420,14 +570,13 @@ function playerLabel(color){
 }
 function renderReview(){
   if(currentTab!=='review') return;
+  if(PVPreview.active) return renderLinePreview();
   const g=R.game; if(!g){ board.set({fen:new Chess().fen(), hl:[], arrows:[], badge:null, flip:R.flip}); setEvalBar(50,'0.0',R.flip); renderMaterial(null, [], new Chess().fen(), R.flip?'w':'b'); return; }
   if(R.v) return renderVariation();
   $('#openingName').innerHTML = R.openingHtml;
   const i=R.cur; const fen=g.fens[i];
   const mv=i>0?g.moves[i-1]:null; const res=i>0?R.res[i-1]:null;
-  const arrows=[];
-  if(mv && res && !res.isBest && res.cls!=='book'){ const bu=R.an[i-1].lines[0].pv[0]; if(bu) arrows.push({from:bu.slice(0,2), to:bu.slice(2,4), color:'#81b64c'}); }
-  else if(R.an[i] && R.an[i].lines[0].pv && R.an[i].lines[0].pv[0] && i<g.fens.length-1){ const bu=R.an[i].lines[0].pv[0]; arrows.push({from:bu.slice(0,2), to:bu.slice(2,4), color:'#4aa3ff', w:12, op:.6}); }
+  const arrows=positionArrows(R.an[i], i>0?R.an[i-1]:null, mv, res);
   const c=new Chess(fen); let chk=null; if(c.in_check()){ const b=parseFen(fen); chk=Object.keys(b).find(s=>b[s].type==='k'&&b[s].color===c.turn()); }
   board.set({fen, flip:R.flip, hl: mv?[mv.from,mv.to]:[], arrows, check:chk, badge: res?{sq:mv.to, sym:CLS[res.cls].sym, color:CLS[res.cls].hex}:null});
   const an=R.an[i]; if(an) setEvalBar(wpWhite(an), shortEval(an.lines[0], an.stm), R.flip); 
@@ -435,18 +584,19 @@ function renderReview(){
   renderMaterial(g.startFen, g.moves.slice(0,i), fen, R.flip?'w':'b');
   // explanation
   const box=$('#explainBox');
-  if(!mv){ box.innerHTML = `<div class="head">♟️ עמדת הפתיחה</div><div class="muted">השתמש בחצים ← → או לחץ על מהלך כדי לעבור על המשחק. ${R.analyzing?'הניתוח רץ ברקע…':'הסיכום המלא נמצא למטה.'}</div>`; }
-  else if(!res){ box.innerHTML = `<div class="head">${san(moveNo(i-1)+mv.san)}</div><div class="muted">מנתח את המהלך הזה…</div>`; }
+  const mpv = mpvHtml(fen, an, {pending:R.analyzing && !an});
+  if(!mv){ box.innerHTML = `<div class="head">♟️ עמדת הפתיחה</div><div class="muted">השתמש בחצים ← → או לחץ על מהלך כדי לעבור על המשחק. ${R.analyzing?'הניתוח רץ ברקע…':'הסיכום המלא נמצא למטה.'}</div>`+mpv; }
+  else if(!res){ box.innerHTML = `<div class="head">${san(moveNo(i-1)+mv.san)}</div><div class="muted">מנתח את המהלך הזה…</div>`+mpv; }
   else {
     const e=R.exp[i-1]; const anB=R.an[i-1], anA=R.an[i];
+    const bu=anB.lines[0].pv && anB.lines[0].pv[0];
+    const actions = (isWeakCls(res.cls) && bu && bu!==mv.uci)
+      ? `<div class="fixrow"><button class="btn primary" id="fixBtn" title="הצג את המהלך הטוב יותר על הלוח, עם הסבר, והמשך לשחק ממנו">🔧 תקן את המהלך</button><button class="btn" id="lineBtn" title="דיפדוף בהמשך שהמנוע ממליץ, בלי לשנות את המשחק">הראה המשך מומלץ</button></div>` : '';
     box.innerHTML = `<div class="head">${ci(res.cls)}<span>${san(moveNo(i-1)+mv.san)} – ${CLS[res.cls].he}</span></div>
       <ul>${e.html.map(x=>`<li>${x}</li>`).join('')}</ul>
-      <div class="evalline">הערכה: ${san(evalText(anB.lines[0], anB.stm))} ← לפני · אחרי → ${san(evalText(anA.lines[0], anA.stm))} · דיוק המהלך: ${Math.round(res.acc)}%</div>`;
-    const bu=anB.lines[0].pv && anB.lines[0].pv[0];
-    if(['inaccuracy','mistake','blunder','miss'].includes(res.cls) && bu && bu!==mv.uci){
-      box.innerHTML += `<button class="btn primary fixbtn" id="fixBtn" title="הצג את המהלך הטוב יותר על הלוח, עם הסבר, והמשך לשחק ממנו">🔧 תקן את המהלך</button>`;
-      $('#fixBtn').onclick=()=>fixMove(i-1);
-    }
+      <div class="evalline">הערכה: ${san(evalText(anB.lines[0], anB.stm))} ← לפני · אחרי → ${san(evalText(anA.lines[0], anA.stm))} · דיוק המהלך: ${Math.round(res.acc)}%</div>`+mpv+actions;
+    if($('#fixBtn')) $('#fixBtn').onclick=()=>fixMove(i-1);
+    if($('#lineBtn')) $('#lineBtn').onclick=()=>previewBestLine(i-1);
   }
   $$('.mv').forEach(el=>el.classList.toggle('cur', +el.dataset.ply===i));
   const cur=$('.mv.cur'); if(cur){ const box2=$('#movesBox'); const r1=cur.getBoundingClientRect(), r2=box2.getBoundingClientRect(); if(r1.top<r2.top||r1.bottom>r2.bottom) box2.scrollTop += r1.top-r2.top-box2.clientHeight/2; }
@@ -460,7 +610,7 @@ function renderMoves(){
     h+=`<tr><td class="no">${k/2+1}.</td>${cell(k)}${cell(k+1)}</tr>`;
   }
   $('#movesBox').innerHTML=h+'</table>';
-  $$('#movesBox .mv').forEach(el=>el.onclick=()=>goto(+el.dataset.ply));
+  $$('#movesBox .mv').forEach(el=>el.onclick=()=>{ if(PVPreview.active){ toast('לחץ על "חזור למשחק" כדי לנווט במשחק'); return; } goto(+el.dataset.ply); });
   $$('.mv').forEach(el=>el.classList.toggle('cur', +el.dataset.ply===R.cur));
 }
 function renderGraph(){
@@ -516,7 +666,7 @@ function renderSummary(){
   const st = focus ? stats[focus] : null;
   if(st){ const bad=st.counts.blunder+st.counts.mistake+st.counts.miss; s+=`<div class="muted small" style="margin-top:8px">בשורה התחתונה: דיוק של ${st.acc.toFixed(1)}%, ${st.counts.blunder} טעויות גסות, ${st.counts.mistake} טעויות ו-${st.counts.miss} החמצות. ${bad===0?'משחק מצוין!':'כל טעות גסה שנחסכת שווה הרבה נקודות דירוג.'}</div>`; }
   box.innerHTML=s; $('#summaryCard').classList.remove('hidden');
-  $$('#summaryBox .moment').forEach(el=>el.onclick=()=>{ goto(+el.dataset.ply); window.scrollTo({top:0,behavior:'smooth'}); });
+  $$('#summaryBox .moment').forEach(el=>el.onclick=()=>{ if(PVPreview.active){ toast('לחץ על "חזור למשחק" כדי לנווט במשחק'); return; } goto(+el.dataset.ply); window.scrollTo({top:0,behavior:'smooth'}); });
 }
 
 /* ================= Import ================= */

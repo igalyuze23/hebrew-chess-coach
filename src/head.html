@@ -22,6 +22,7 @@ header{display:flex;align-items:center;gap:14px;padding:10px 18px;background:lin
 .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px;letter-spacing:.2px}
 .logo .k{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#3f7d20);display:grid;place-items:center;font-size:22px;color:#fff;box-shadow:0 4px 14px #81b64c40}
 .logo small{display:block;font-weight:500;font-size:12px;color:var(--muted)}
+.ver{font-weight:700;color:#c5d4b4}
 nav.tabs{display:flex;gap:6px;margin-inline-start:auto;background:var(--bg2);padding:4px;border-radius:12px;border:1px solid var(--line)}
 nav.tabs button{border:0;background:transparent;padding:7px 14px;border-radius:9px;cursor:pointer;color:var(--muted);font-weight:600}
 nav.tabs button.on{background:var(--card2);color:var(--text);box-shadow:0 1px 0 #ffffff10 inset}
@@ -54,9 +55,9 @@ main{max-width:1320px;margin:0 auto;padding:16px}
 .badge{position:absolute;top:-6%;right:-6%;width:42%;height:42%;max-width:30px;max-height:30px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:900;font-size:clamp(9px,1.6vw,14px);z-index:6;box-shadow:0 2px 6px #0007;border:2px solid #fff;font-family:system-ui}
 svg.arrows{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:5}
 .ghost{position:fixed;pointer-events:none;z-index:1000;transform:translate(-50%,-50%)}
-.players{display:flex;justify-content:space-between;align-items:center;margin:6px 0 6px 34px;font-size:14px;direction:rtl}
-.players .p{display:flex;gap:8px;align-items:center}
-.mat{display:flex;align-items:center;direction:ltr;min-height:20px;gap:0;flex-wrap:nowrap}
+.players{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:6px 0 6px 34px;font-size:14px;direction:rtl}
+.players .p{display:flex;gap:8px;align-items:center;min-width:0;flex:1 1 auto;overflow:hidden}
+.mat{display:flex;align-items:center;direction:ltr;min-height:20px;gap:0;flex:0 0 auto;flex-wrap:wrap;justify-content:flex-start;max-width:70%}
 .mat .grp{display:inline-flex;margin-right:5px}
 .mat img{width:19px;height:19px;margin-right:-8px}
 .mat .grp img:last-child{margin-right:0}
@@ -65,6 +66,27 @@ svg.arrows{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;
 .varbar{display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap;margin:10px 0 0 34px;padding:8px 10px;border-radius:12px;background:#4aa3ff14;border:1px solid #4aa3ff55}
 .varbar .vt{font-weight:700;font-size:13.5px}
 .fixbtn{margin-top:10px}
+.fixrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.fixrow .btn{flex:1 1 160px;margin-top:0}
+.mpv{margin-top:12px;border:1px solid var(--line);border-radius:12px;background:var(--bg2)}
+.mpv-h{display:flex;justify-content:space-between;gap:8px;align-items:baseline;padding:8px 10px 2px;font-weight:800;font-size:13.5px}
+.mpv ol{list-style:none;margin:0;padding:0 0 6px}
+.mpv li{display:flex;gap:8px;align-items:baseline;padding:5px 10px;direction:ltr;text-align:left}
+.mpv li.r1{background:#81b64c16}
+.mpv .rk{font-weight:900;width:1.2em;text-align:center;flex:0 0 auto}
+.mpv li.r1 .rk{color:#9ed36a}
+.mpv li.r2 .rk{color:#7eb6ff}
+.mpv li.r3 .rk{color:#e6b15a}
+.mpv .sc{font-family:ui-monospace,Consolas,monospace;font-weight:800;min-width:3.2em;flex:0 0 auto}
+.mpv .sc.pos{color:#b6e08a}
+.mpv .sc.neg{color:#ff9b98}
+.mpv .pv{white-space:normal;overflow-wrap:anywhere;font-family:ui-monospace,Consolas,monospace;font-weight:600;direction:ltr;unicode-bidi:isolate;line-height:1.45}
+.pvbar{display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap;margin:10px 0 0 34px;padding:8px 10px;border-radius:12px;background:#81b64c14;border:1px solid #81b64c66}
+.pvbar .vt{font-weight:800;font-size:13.5px}
+.pvbar .btn{min-height:40px}
+body.in-preview .board{box-shadow:0 0 0 3px #81b64c, 0 10px 30px #0008}
+body.in-preview #movesBox, body.in-preview #graph, body.in-preview #summaryCard{opacity:.55}
+body.in-preview #varBar{display:none!important}
 .varmoves{direction:ltr;text-align:left;margin-top:10px;padding:8px;border-radius:10px;background:var(--bg2);border:1px solid var(--line);font-family:ui-monospace,Consolas,monospace;font-size:13.5px;line-height:2}
 .varmoves .vm{cursor:pointer;padding:2px 5px;border-radius:6px;display:inline-flex;align-items:center;gap:4px}
 .varmoves .vm:hover{background:#ffffff14}
@@ -157,15 +179,16 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:20px}
   .evalbar{width:18px}
   .players,.navbar,.ttsbar{margin-left:26px;padding-left:0}
   .ttsnote{margin-left:0}
-  .varbar{margin-left:26px}
+  .varbar,.pvbar{margin-left:26px}
   .mat img{width:16px;height:16px;margin-right:-7px}
+  .fixrow .btn{flex:1 1 100%}
   .players .p{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 }
 </style>
 </head>
 <body>
 <header>
-  <div class="logo"><div class="k">♞</div><div>מאמן שחמט<small>ניתוח משחקים והסברים בעברית · חינם</small></div></div>
+  <div class="logo"><div class="k">♞</div><div>מאמן שחמט<small>ניתוח משחקים והסברים בעברית · <span class="ver">v1.2</span></small></div></div>
   <nav class="tabs">
     <button id="tabReview" class="on">ניתוח משחק</button>
     <button id="tabPlay">שחק מול המאמן</button>
@@ -192,6 +215,14 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:20px}
       <span class="vt">🔀 וריאציה</span>
       <button class="btn sm" id="varEngineBtn" title="המנוע ישחק את המהלך הטוב ביותר בעמדה">🤖 תשובת המנוע</button>
       <button class="btn sm primary" id="varBackBtn">↩ חזרה לניתוח המשחק</button>
+    </div>
+    <div class="pvbar hidden" id="pvBar">
+      <span class="vt" id="pvTitle">המשך מומלץ</span>
+      <bdi class="san" id="pvScore"></bdi>
+      <button class="btn sm" id="pvPrevBtn">הקודם</button>
+      <button class="btn sm" id="pvNextBtn">הבא</button>
+      <span class="small muted" id="pvCount"></span>
+      <button class="btn sm primary" id="pvBackBtn">חזור למשחק</button>
     </div>
     <div class="ttsbar">
       <button class="btn sm" id="ttsBtn" title="הפעל/כבה קריין">🔇 קריין</button>
@@ -283,6 +314,7 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:20px}
     <div class="card">
       <h3>🧑‍🏫 המאמן</h3>
       <div class="coachmsg" id="coachMsg">בחר רמה ולחץ על "משחק חדש". אחרי כל מהלך שלך אפשר ללחוץ על <b>למה?</b> כדי לקבל הסבר, ועל <b>רמז</b> כשנתקעים.</div>
+      <div id="playMpv"></div>
     </div>
     <div class="card">
       <h3>📜 מהלכים</h3>
@@ -291,6 +323,6 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:20px}
   </section>
 </div>
 </main>
-<footer>קוד פתוח (GPLv3) · <a href="https://github.com/igalyuze23/hebrew-chess-coach">GitHub</a> · <a href="lib/README.md">רישיונות</a><br>מנוע: Stockfish 19 (lite, WebAssembly) רץ מקומית בדפדפן · ההסברים נוצרים אוטומטית מניתוח המנוע ועשויים להיות לא מדויקים לפעמים</footer>
+<footer>גרסה 1.2 · קוד פתוח (GPLv3) · <a href="https://github.com/igalyuze23/hebrew-chess-coach">GitHub</a> · <a href="lib/README.md">רישיונות</a><br>מנוע: Stockfish 19 (lite, WebAssembly) רץ מקומית בדפדפן · ההסברים נוצרים אוטומטית מניתוח המנוע ועשויים להיות לא מדויקים לפעמים</footer>
 <script src="lib/chess-classic.js"></script>
 <script src="lib/sf-bundle.js"></script>
