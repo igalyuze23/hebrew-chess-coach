@@ -188,7 +188,7 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:20px}
 </head>
 <body>
 <header>
-  <div class="logo"><div class="k">♞</div><div>מאמן שחמט<small>ניתוח משחקים והסברים בעברית · <span class="ver">v1.2</span></small></div></div>
+  <div class="logo"><div class="k">♞</div><div>מאמן שחמט<small>ניתוח משחקים והסברים בעברית · <span class="ver">v1.3</span></small></div></div>
   <nav class="tabs">
     <button id="tabReview" class="on">ניתוח משחק</button>
     <button id="tabPlay">שחק מול המאמן</button>
@@ -226,6 +226,13 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:20px}
     </div>
     <div class="ttsbar">
       <button class="btn sm" id="ttsBtn" title="הפעל/כבה קריין">🔇 קריין</button>
+      <label class="small muted">קול
+        <select id="ttsMode" title="בחירת קול להקראה">
+          <option value="auto">אוטומטי</option>
+          <option value="system">קול המערכת</option>
+          <option value="online">קול עברי מקוון</option>
+        </select>
+      </label>
       <label class="small muted">מהירות
         <select id="ttsRate"><option value="0.75">0.75</option><option value="1">1</option><option value="1.25">1.25</option><option value="1.5">1.5</option><option value="2">2</option></select>
       </label>
@@ -323,7 +330,7 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:20px}
   </section>
 </div>
 </main>
-<footer>גרסה 1.2 · קוד פתוח (GPLv3) · <a href="https://github.com/igalyuze23/hebrew-chess-coach">GitHub</a> · <a href="lib/README.md">רישיונות</a><br>מנוע: Stockfish 19 (lite, WebAssembly) רץ מקומית בדפדפן · ההסברים נוצרים אוטומטית מניתוח המנוע ועשויים להיות לא מדויקים לפעמים</footer>
+<footer>גרסה 1.3 · קוד פתוח (GPLv3) · <a href="https://github.com/igalyuze23/hebrew-chess-coach">GitHub</a> · <a href="lib/README.md">רישיונות</a><br>מנוע: Stockfish 19 (lite, WebAssembly) רץ מקומית בדפדפן · ההסברים נוצרים אוטומטית מניתוח המנוע ועשויים להיות לא מדויקים לפעמים</footer>
 <script src="lib/chess-classic.js"></script>
 <script src="lib/sf-bundle.js"></script>
 <script>
@@ -1436,8 +1443,25 @@ const SAMPLE_PGN = `[Event "Paris Opera"]
 
 1. e4 e5 2. Nf3 d6 3. d4 Bg4 4. dxe5 Bxf3 5. Qxf3 dxe5 6. Bc4 Nf6 7. Qb3 Qe7 8. Nc3 c6 9. Bg5 b5 10. Nxb5 cxb5 11. Bxb5+ Nbd7 12. O-O-O Rd8 13. Rxd7 Rxd7 14. Rd1 Qe6 15. Bxd7+ Nxd7 16. Qb8+ Nxb8 17. Rd8# 1-0`;
 
-/* ================= Narrator (Web Speech API, Hebrew) ================= */
-const NAR = { on: LS.get('tts','0')==='1', rate: +LS.get('ttsrate','1'), voice:null, voicesLoaded:false, auto:false, autoTok:0, log:[] };
+/* ================= Narrator (Hebrew) =================
+ * Automatic: a real he/iw system voice (Natural/Online names first, e.g. Edge
+ * Avri/Hila, or the Android shim) speaks through speechSynthesis.
+ * Otherwise, or when the user picks it: keyless Google Translate TTS
+ * (client=tw-ob, tl=iw) played on an <audio> element. No API key, no backend.
+ * 250+ characters gets HTTP 400, so lines are split under 180 at sentence
+ * and comma boundaries. say() always settles on error or timeout.
+ */
+const TTS_MODES = ['auto','system','online'];
+function savedTtsMode(){
+  const m = LS.get('ttsmode','auto');
+  return TTS_MODES.includes(m) ? m : 'auto';
+}
+const NAR = {
+  on: LS.get('tts','0')==='1', rate: +LS.get('ttsrate','1') || 1, mode: savedTtsMode(),
+  voice:null, voicesLoaded:false, voicesReady:typeof speechSynthesis==='undefined',
+  auto:false, autoTok:0, log:[],
+  audio:null, audioTok:0, audioTimer:0, playing:false, q:[]
+};
 window.__ttsLog = NAR.log;
 const SP_PIECE={K:'מלך',Q:'מלכה',R:'צריח',B:'רץ',N:'פרש'};
 const SP_FILE={a:'איי',b:'בי',c:'סי',d:'די',e:'אי',f:'אף',g:"ג'י",h:"אייץ'"};
@@ -1473,39 +1497,209 @@ function shortSpoken(exp, cls){
 }
 const spLabel = k => k==='book' ? 'מהלך תיאוריה' : CLS[k].he;
 const endDot = t => /[.!?]$/.test(t) ? t : t+'.';
+function isHeVoice(v){ return !!(v && /^(he|iw)/i.test(v.lang||'')); }
+function hebrewVoice(){ return isHeVoice(NAR.voice) ? NAR.voice : null; }
+function useOnline(){
+  if(NAR.mode==='online') return true;
+  if(NAR.mode==='system') return false;
+  if(hebrewVoice()) return false;
+  return !!NAR.voicesReady;
+}
 function pickVoice(){
-  if(!('speechSynthesis' in window)) return;
-  const vs=speechSynthesis.getVoices(); if(vs.length) NAR.voicesLoaded=true;
-  NAR.voice = vs.find(v=>/^(he|iw)/i.test(v.lang) && /natural|online/i.test(v.name)) || vs.find(v=>/^(he|iw)/i.test(v.lang)) || null;
+  if(!('speechSynthesis' in window)){ NAR.voicesReady=true; updateTtsUi(); return; }
+  let vs=[];
+  try{ vs=speechSynthesis.getVoices()||[]; }catch(e){ vs=[]; }
+  if(vs.length){ NAR.voicesLoaded=true; NAR.voicesReady=true; }
+  NAR.voice = vs.find(v=>isHeVoice(v) && /natural|online/i.test(v.name||'')) || vs.find(isHeVoice) || null;
   updateTtsUi();
 }
 function updateTtsUi(){
   const b=$('#ttsBtn'); if(!b) return;
   b.textContent = NAR.on ? '🔊 קריין' : '🔇 קריין'; b.classList.toggle('on', NAR.on);
-  $('#ttsRate').value=String(NAR.rate);
-  const note=$('#ttsNote');
-  if(!('speechSynthesis' in window)){ note.innerHTML='הדפדפן הזה לא תומך בהקראה. נסה Chrome או Edge.'; note.classList.toggle('hidden', !NAR.on); return; }
-  if(NAR.on && !NAR.voice){
+  const rate=$('#ttsRate'); if(rate) rate.value=String(NAR.rate);
+  const mode=$('#ttsMode'); if(mode && mode.value!==NAR.mode) mode.value=NAR.mode;
+  const auto=$('#autoBtn'); if(auto) auto.textContent = NAR.auto ? '⏸ עצור' : '▶ ניגון אוטומטי';
+  const note=$('#ttsNote'); if(!note) return;
+  if(!NAR.on){ note.classList.add('hidden'); return; }
+  if(useOnline()){
+    note.textContent='מופעל קול עברי מקוון (צריך חיבור לאינטרנט).';
+    note.classList.remove('hidden');
+    return;
+  }
+  if(!('speechSynthesis' in window)){
+    note.innerHTML='הדפדפן הזה לא תומך בהקראה. נסה Chrome או Edge.';
+    note.classList.remove('hidden');
+    return;
+  }
+  if(NAR.voicesReady && !hebrewVoice()){
     note.innerHTML = `⚠️ לא נמצא קול עברי במחשב, אז ההקראה תשתמש בקול ברירת המחדל (ייתכן שלא יבטא עברית טוב).<br>
       <b>להוספת קול עברי ב-Windows:</b> הגדרות ← זמן ושפה ← דיבור ← "ניהול קולות" ← הוספת קולות ← בחר <b>עברית</b> (Microsoft Asaf) ← התקן, ואז סגור ופתח מחדש את הדפדפן.<br>
-      <span class="muted">טיפ: בדפדפן Edge יש קולות עבריים טבעיים מובנים (Avri / Hila) בלי התקנה.</span>`;
+      <span class="muted">טיפ: בדפדפן Edge יש קולות עבריים טבעיים מובנים (Avri / Hila) בלי התקנה. אפשר גם לבחור "קול עברי מקוון".</span>`;
     note.classList.remove('hidden');
   } else note.classList.add('hidden');
-  $('#autoBtn').textContent = NAR.auto ? '⏸ עצור' : '▶ ניגון אוטומטי';
+}
+function splitTts(text, max){
+  max=max||180;
+  const out=[];
+  let s=String(text||'').replace(/\s+/g,' ').trim();
+  while(s.length>max){
+    const win=s.slice(0, max);
+    let at=-1;
+    for(const mark of ['. ','! ','? ','… ']){ const i=win.lastIndexOf(mark); if(i>at) at=i; }
+    let cut;
+    if(at>=8) cut=at+1;
+    else {
+      at=-1;
+      for(const mark of [', ','، ']){ const i=win.lastIndexOf(mark); if(i>at) at=i; }
+      if(at>=8) cut=at+1;
+      else { const sp=win.lastIndexOf(' '); cut=sp>=8 ? sp : max; }
+    }
+    const piece=s.slice(0, cut).trim();
+    if(!piece){ out.push(s.slice(0, max)); s=s.slice(max).trim(); continue; }
+    out.push(piece);
+    s=s.slice(cut).trim();
+  }
+  if(s) out.push(s);
+  return out;
+}
+function ttsUrl(q){
+  return 'https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=iw&q='+encodeURIComponent(q);
+}
+function clearAudioTimer(){ if(NAR.audioTimer){ clearTimeout(NAR.audioTimer); NAR.audioTimer=0; } }
+function ensureAudio(){
+  if(NAR.audio && NAR.audio.isConnected) return NAR.audio;
+  const a=document.createElement('audio');
+  a.setAttribute('playsinline',''); a.setAttribute('webkit-playsinline','');
+  a.preload='auto'; a.hidden=true; a.setAttribute('aria-hidden','true');
+  (document.body||document.documentElement).appendChild(a);
+  NAR.audio=a;
+  return a;
+}
+// translate_tts returns 404 HTML when a Referer is present, and Chrome does not
+// honor referrerpolicy on the audio element itself. A document policy does apply.
+function stripReferrer(){
+  if(document.querySelector('meta[name="referrer"][content="no-referrer"]')) return;
+  const m=document.createElement('meta');
+  m.name='referrer'; m.content='no-referrer';
+  (document.head||document.documentElement).appendChild(m);
+}
+function stopOnline(){
+  NAR.audioTok++;
+  clearAudioTimer();
+  const q=NAR.q.splice(0);
+  NAR.playing=false;
+  const a=NAR.audio;
+  if(a){
+    a.onended=a.onerror=a.onplay=a.onloadedmetadata=null;
+    try{ a.pause(); }catch(e){}
+    try{ a.removeAttribute('src'); a.load(); }catch(e){}
+  }
+  q.forEach(j=>j.fin());
+}
+function stopSpeaking(){
+  stopOnline();
+  if('speechSynthesis' in window){ try{ speechSynthesis.cancel(); }catch(e){} }
+}
+function playNextChunk(){
+  if(NAR.playing) return;
+  const job=NAR.q[0];
+  if(!job) return;
+  if(job.tok!==NAR.audioTok || job.i>=job.chunks.length){
+    NAR.q.shift(); job.fin(); playNextChunk(); return;
+  }
+  const chunk=job.chunks[job.i++];
+  const gen=job.tok;
+  const a=ensureAudio();
+  const rate=(NAR.rate>0 && NAR.rate<=4) ? NAR.rate : 1;
+  NAR.playing=true;
+  let done=false, listen=false;
+  const step=()=>{
+    if(done || gen!==NAR.audioTok) return;
+    done=true;
+    clearAudioTimer();
+    a.onended=a.onerror=a.onplay=a.onloadedmetadata=null;
+    NAR.playing=false;
+    playNextChunk();
+  };
+  const budget=Math.max(10000, Math.round(chunk.length*180/rate)+7000);
+  NAR.audioTimer=setTimeout(step, budget);
+  // Ignore an error from the previous src aborting in the same turn.
+  a.onended=()=>{ if(listen) step(); };
+  a.onerror=()=>{ if(listen) step(); };
+  const apply=()=>{ try{ if(gen===NAR.audioTok) a.playbackRate=rate; }catch(e){} };
+  a.onloadedmetadata=apply; a.onplay=apply;
+  stripReferrer();
+  try{ a.src=ttsUrl(chunk); }catch(e){ listen=true; setTimeout(step, 0); return; }
+  setTimeout(()=>{ listen=true; }, 0);
+  apply();
+  let p;
+  try{ p=a.play(); }catch(e){ setTimeout(step, 0); return; }
+  if(p&&typeof p.then==='function') p.then(apply).catch(()=>setTimeout(step, 0));
+}
+function sayOnline(text, interrupt){
+  if(interrupt){
+    stopOnline();
+    if('speechSynthesis' in window){ try{ speechSynthesis.cancel(); }catch(e){} }
+  }
+  const chunks=splitTts(text, 180);
+  const tok=NAR.audioTok;
+  return new Promise(resolve=>{
+    const job={chunks, i:0, tok, done:false, fin(){ if(this.done) return; this.done=true; resolve(); }};
+    if(!chunks.length){ job.fin(); return; }
+    NAR.q.push(job);
+    playNextChunk();
+  });
+}
+function saySystem(text, interrupt){
+  if(!('speechSynthesis' in window)) return Promise.resolve();
+  if(interrupt){ try{ speechSynthesis.cancel(); }catch(e){} }
+  return new Promise(res=>{
+    const u=new SpeechSynthesisUtterance(text);
+    u.lang='he-IL';
+    if(hebrewVoice()){ try{ u.voice=NAR.voice; }catch(e){} }
+    const rate=(NAR.rate>0 && NAR.rate<=4) ? NAR.rate : 1;
+    u.rate=rate;
+    let done=false; const fin=()=>{ if(!done){ done=true; res(); } };
+    u.onend=fin; u.onerror=fin;
+    setTimeout(fin, Math.max(1500, text.length*95/rate)+1500);
+    try{ speechSynthesis.speak(u); }catch(e){ fin(); }
+  });
+}
+function speakNow(text, interrupt){
+  if(!NAR.on || !text) return Promise.resolve();
+  if(useOnline()) return sayOnline(text, interrupt);
+  if(interrupt) stopOnline();
+  return saySystem(text, interrupt);
+}
+function waitVoices(){
+  if(NAR.voicesReady || !('speechSynthesis' in window)){ NAR.voicesReady=true; return Promise.resolve(); }
+  if(NAR.voicesWait) return NAR.voicesWait;
+  NAR.voicesWait=new Promise(res=>{
+    let settled=false;
+    const fin=()=>{
+      if(settled) return; settled=true;
+      NAR.voicesReady=true;
+      try{ speechSynthesis.onvoiceschanged=pickVoice; }catch(e){}
+      try{ pickVoice(); }catch(e){}
+      res();
+    };
+    try{
+      const prev=speechSynthesis.onvoiceschanged;
+      speechSynthesis.onvoiceschanged=function(){
+        if(typeof prev==='function' && prev!==pickVoice && prev!==speechSynthesis.onvoiceschanged){ try{ prev(); }catch(e){} }
+        fin();
+      };
+    }catch(e){}
+    setTimeout(fin, 1200);
+  });
+  return NAR.voicesWait;
 }
 function say(text, {interrupt=true}={}){
   text=(text||'').trim(); if(!NAR.on || !text) return Promise.resolve();
   NAR.log.push(text); if(NAR.log.length>200) NAR.log.shift();
-  if(!('speechSynthesis' in window)) return Promise.resolve();
-  if(interrupt) speechSynthesis.cancel();
-  return new Promise(res=>{
-    const u=new SpeechSynthesisUtterance(text); u.lang='he-IL'; if(NAR.voice) u.voice=NAR.voice; u.rate=NAR.rate;
-    let done=false; const fin=()=>{ if(!done){ done=true; res(); } };
-    u.onend=fin; u.onerror=fin;
-    // safety net: some browsers/headless never fire onend
-    setTimeout(fin, Math.max(1500, text.length*95/NAR.rate) + 1500);
-    speechSynthesis.speak(u);
-  });
+  if(NAR.mode==='auto' && !NAR.voicesReady && ('speechSynthesis' in window))
+    return waitVoices().then(()=>speakNow(text, interrupt));
+  return speakNow(text, interrupt);
 }
 function reviewSpeech(i){
   const g=R.game; if(!g) return '';
@@ -1519,7 +1713,7 @@ function reviewSpeech(i){
 function narrateReview(i){ if(NAR.on) say(reviewSpeech(i)); }
 function stopAuto(){ if(NAR.auto){ NAR.auto=false; NAR.autoTok++; updateTtsUi(); } }
 async function autoplay(){
-  if(NAR.auto){ stopAuto(); if('speechSynthesis' in window) speechSynthesis.cancel(); return; }
+  if(NAR.auto){ stopAuto(); stopSpeaking(); return; }
   if(!R.game){ toast('קודם טען משחק לניתוח'); return; }
   if(R.v) exitVariation(false);
   NAR.auto=true; const tok=++NAR.autoTok; updateTtsUi();
@@ -1532,9 +1726,25 @@ async function autoplay(){
   if(tok===NAR.autoTok){ NAR.auto=false; updateTtsUi(); }
 }
 function initNarrator(){
-  if('speechSynthesis' in window){ pickVoice(); speechSynthesis.onvoiceschanged=pickVoice; setTimeout(pickVoice, 1200); }
-  $('#ttsBtn').onclick=()=>{ NAR.on=!NAR.on; LS.set('tts', NAR.on?'1':'0'); if(!NAR.on && 'speechSynthesis' in window) speechSynthesis.cancel(); updateTtsUi(); if(NAR.on) say(NAR.voice?'הקריין הופעל.':'הקריין הופעל.'); };
-  $('#ttsRate').onchange=e=>{ NAR.rate=+e.target.value; LS.set('ttsrate', NAR.rate); say('זו המהירות החדשה.'); };
+  if('speechSynthesis' in window){
+    pickVoice();
+    try{ speechSynthesis.onvoiceschanged=pickVoice; }catch(e){}
+    setTimeout(()=>{ NAR.voicesReady=true; pickVoice(); }, 1200);
+  } else NAR.voicesReady=true;
+  $('#ttsBtn').onclick=()=>{
+    NAR.on=!NAR.on; LS.set('tts', NAR.on?'1':'0');
+    if(!NAR.on) stopSpeaking();
+    updateTtsUi();
+    if(NAR.on) say('הקריין הופעל.');
+  };
+  $('#ttsRate').onchange=e=>{ NAR.rate=+e.target.value || 1; LS.set('ttsrate', NAR.rate); say('זו המהירות החדשה.'); };
+  const mode=$('#ttsMode');
+  if(mode) mode.onchange=e=>{
+    NAR.mode=TTS_MODES.includes(e.target.value) ? e.target.value : 'auto';
+    LS.set('ttsmode', NAR.mode);
+    updateTtsUi();
+    say('זה הקול החדש.');
+  };
   $('#autoBtn').onclick=autoplay;
   updateTtsUi();
 }
