@@ -101,10 +101,30 @@ function capturedFromFen(fen){ // pieces already missing in a custom start posit
   return caps;
 }
 function materialState(startFen, moves, fen){
+  // Icons come from replaying the moves that lead to this fen, so stepping
+  // backward/forward (review, sidelines, or a PV preview) cannot leave a stale capture.
   const caps = startFen ? capturedFromFen(startFen) : {w:[], b:[]};
-  for(const m of moves||[]){ if(m && m.captured) caps[m.color].push(m.captured); }
+  const list = moves || [];
+  let replayed = false;
+  if(list.length && list.every(m => m && m.from && m.to)){
+    try{
+      const c = new Chess(startFen || undefined);
+      const got = {w:[], b:[]};
+      let ok = true;
+      for(const m of list){
+        const spec = {from:m.from, to:m.to};
+        const promo = m.promotion || (m.uci && m.uci.length>4 ? m.uci[4] : '');
+        if(promo) spec.promotion = promo;
+        const played = c.move(spec);
+        if(!played){ ok=false; break; }
+        if(played.captured) got[played.color].push(played.captured);
+      }
+      if(ok){ caps.w = caps.w.concat(got.w); caps.b = caps.b.concat(got.b); replayed = true; }
+    }catch(e){ replayed = false; }
+  }
+  if(!replayed){ for(const m of list){ if(m && m.captured && m.color) caps[m.color].push(m.captured); } }
   const ord='pnbrq'; caps.w.sort((a,b)=>ord.indexOf(a)-ord.indexOf(b)); caps.b.sort((a,b)=>ord.indexOf(a)-ord.indexOf(b));
-  return {caps, diff: material(parseFen(fen))}; // diff = white minus black
+  return {caps, diff: material(parseFen(fen))}; // diff = white minus black, promotions included via the fen
 }
 function matHtml(st, color){
   const list=st.caps[color]; const oc=other(color); let h='', last=null, grp='';
@@ -119,8 +139,13 @@ function renderMaterial(startFen, moves, fen, topColor){
   const t=$('#topMat'), b=$('#botMat'); if(!t||!b) return st;
   t.innerHTML=matHtml(st, topColor); b.innerHTML=matHtml(st, other(topColor));
   const tip=c=>{ const a=c==='w'?st.diff:-st.diff; return (c==='w'?'הלבן':'השחור')+' לקח: '+(st.caps[c].map(x=>HE[x]).join(', ')||'כלום')+(a>0?` · יתרון חומר +${a}`:''); };
-  t.title=tip(topColor); b.title=tip(other(topColor));
-  t.dataset.adv = (topColor==='w'?st.diff:-st.diff); b.dataset.adv = (topColor==='w'?-st.diff:st.diff);
+  const apply=(el,color)=>{
+    const adv = color==='w' ? st.diff : -st.diff;
+    el.title=tip(color);
+    el.dataset.adv=String(adv);
+    el.dataset.caps=st.caps[color].join('');
+  };
+  apply(t, topColor); apply(b, other(topColor));
   return st;
 }
 function nonPawnMaterial(b){ let s=0; for(const k in b){ if(!'pk'.includes(b[k].type)) s+=VAL[b[k].type]; } return s; }
@@ -129,10 +154,30 @@ function nonPawnMaterial(b){ let s=0; for(const k in b){ if(!'pk'.includes(b[k].
 function mvFromUci(c, uci){ return c.move({from:uci.slice(0,2), to:uci.slice(2,4), promotion: uci[4] || 'q'}); }
 function uciToMove(fen, uci){ if(!uci) return null; const c=new Chess(fen); return mvFromUci(c, uci); }
 function pvSanList(fen, pv, n=6){ const c=new Chess(fen); const out=[]; for(const u of (pv||[]).slice(0,n)){ const m=mvFromUci(c,u); if(!m) break; out.push(m.san); } return out; }
-function pvText(fen, pv, n=6){
+function pvPlain(fen, pv, n=8){
   const parts=fen.split(' '); let stm=parts[1], no=+parts[5]||1; const sans=pvSanList(fen,pv,n); let out='';
   sans.forEach((s,i)=>{ if(stm==='w') out+=no+'. '+s+' '; else { out += (i===0? no+'... ':'') + s + ' '; no++; } stm=other(stm); });
-  return san(out.trim());
+  return out.trim();
+}
+function pvText(fen, pv, n=6){ return san(pvPlain(fen, pv, n)); }
+function stmEvalText(l){
+  if(!l) return '';
+  if(l.terminal==='mate') return 'מט';
+  if(l.terminal==='draw') return '0.0';
+  if(l.mate!=null) return (l.mate>0?'+':'-')+'M'+Math.abs(l.mate);
+  if(l.cp==null) return '';
+  const v=l.cp/100, abs=Math.abs(v), num=abs>=10?abs.toFixed(0):abs.toFixed(1);
+  return (v>0?'+':v<0?'-':'')+num;
+}
+function buildLine(fen, pv){
+  const c=new Chess(fen); const fens=[c.fen()], moves=[];
+  for(const u of (pv||[])){
+    if(!u || u.length<4) break;
+    const m=mvFromUci(c, u); if(!m) break;
+    moves.push({san:m.san, uci:u, from:m.from, to:m.to, color:m.color, piece:m.piece, captured:m.captured||null, promotion:m.promotion||null, flags:m.flags});
+    fens.push(c.fen());
+  }
+  return {fens, moves};
 }
 function materialAfterLine(fen, pv, minPlies=6){
   const c=new Chess(fen); let i=0, last=null;
@@ -154,7 +199,7 @@ function gameFromPgn(pgn){
   const toks = movetext.split(' ').filter(t => t && !/^\d+\.$/.test(t) && !/^(1-0|0-1|1\/2-1\/2|\*)$/.test(t)).map(t=>t.replace(/^\d+\./,''));
   const startFen = c.fen(); const fens=[startFen], moves=[];
   for(const t of toks){ if(!t) continue; const fenBefore=c.fen(); const m=c.move(t, {sloppy:true}); if(!m) throw new Error('מהלך לא חוקי ב-PGN: '+t);
-    moves.push({san:m.san, uci:m.from+m.to+(m.promotion||''), from:m.from, to:m.to, color:m.color, piece:m.piece, captured:m.captured, flags:m.flags, fenBefore, fenAfter:c.fen()}); fens.push(c.fen()); }
+    moves.push({san:m.san, uci:m.from+m.to+(m.promotion||''), from:m.from, to:m.to, color:m.color, piece:m.piece, captured:m.captured, promotion:m.promotion, flags:m.flags, fenBefore, fenAfter:c.fen()}); fens.push(c.fen()); }
   if(!moves.length) throw new Error('לא נמצאו מהלכים ב-PGN');
   return {headers, fens, moves, startFen};
 }
@@ -187,6 +232,8 @@ class Engine{
   newGame(){ this.queue = this.queue.then(()=>{ this.send('ucinewgame'); this.send('isready'); return this.waitFor(l=>l==='readyok'); }); }
   async _search(fen, {depth=14, multipv=1, movetime=0, skill=20}={}){
     await this.ready;
+    // Set on every search. Analysis asks for 3 lines; the engine's own moves pass 1
+    // so playing strength and speed stay on a single PV.
     this.send('setoption name MultiPV value '+multipv);
     this.send('setoption name Skill Level value '+skill);
     this.send('position fen '+fen);
@@ -197,12 +244,19 @@ class Engine{
           const g=(re)=>{ const m=l.match(re); return m?m[1]:null; };
           const mp=+(g(/ multipv (\d+)/)||1), d=+g(/ depth (\d+)/), cp=g(/ score cp (-?\d+)/), mate=g(/ score mate (-?\d+)/);
           const pv=l.split(' pv ')[1].trim().split(' ');
-          lines[mp] = {depth:d, cp: cp!==null?+cp:null, mate: mate!==null?+mate:null, pv};
+          const prev=lines[mp];
+          if(!prev || d>=prev.depth) lines[mp] = {depth:d, cp: cp!==null?+cp:null, mate: mate!==null?+mate:null, pv};
         } else if(l.startsWith('bestmove')){
           this.listeners.splice(this.listeners.indexOf(f),1);
           const bm=l.split(' ')[1];
+          // keys are multipv indexes starting at 1; numeric sort keeps PV 1 first
           const arr=Object.keys(lines).sort((a,b)=>a-b).map(k=>lines[k]);
           if(!arr.length && bm && bm!=='(none)') arr.push({depth:0, cp:0, mate:null, pv:[bm]});
+          // Keep line 0 as PV 1, the move bestmove names, even if a late info line arrived out of order.
+          if(arr.length && bm && bm!=='(none)' && (!arr[0].pv || arr[0].pv[0]!==bm)){
+            const hit=arr.findIndex(l=>l.pv && l.pv[0]===bm);
+            if(hit>0) arr.unshift(arr.splice(hit,1)[0]);
+          }
           res({lines:arr, bestmove:bm, stm});
         }
       };
@@ -245,6 +299,7 @@ class BoardUI{
       if(this.badge && this.badge.sq===sq) inner+=`<div class="badge" style="background:${this.badge.color}">${this.badge.sym}</div>`;
       h+=`<div class="${cls.join(' ')}" data-sq="${sq}">${inner}</div>`;
     }
+    this.el.dataset.fen=this.fen;
     this.sqsEl.innerHTML=h;
     let s='<defs>'; const cols=[...new Set(this.arrows.map(a=>a.color))]; cols.forEach((c,i)=>{ s+=`<marker id="ah${i}" markerWidth="4" markerHeight="4" refX="2.2" refY="2" orient="auto"><path d="M0,0 L4,2 L0,4 z" fill="${c}"/></marker>`; }); s+='</defs>';
     for(const a of this.arrows){ const [x1,y1]=this.sqCenter(a.from), [x2,y2]=this.sqCenter(a.to); const dx=x2-x1, dy=y2-y1, len=Math.hypot(dx,dy); const ex=x2-dx/len*28, ey=y2-dy/len*28;
