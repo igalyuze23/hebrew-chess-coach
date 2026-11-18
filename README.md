@@ -28,11 +28,11 @@
 - **שם הפתיחה** בעברית (רשימת ECO מקוצרת) וזיהוי מהלכי תיאוריה.
 - **סיכום משחק:** רגעי מפתח ומה כדאי לתרגל, לפי סוג הטעויות שלך.
 - **שחק מול המאמן:** 8 רמות (בערך 400 עד 2700+), כפתור **רמז**, והסבר **"למה?"** אחרי כל מהלך שלך.
-- **🔊 קריין בעברית:** מקריא את המהלכים, הסיווג והסבר קצר (Web Speech API). כולל שליטה במהירות ו**ניגון אוטומטי** של כל המשחק. במצב משחק הקריין אומר את מהלך המאמן ואת המשוב על המהלך שלך.
+- **🔊 קריין בעברית:** מקריא את המהלכים, הסיווג והסבר קצר. אם יש קול עברי במערכת (ב-Edge למשל Avri / Hila) הוא מועדף; בלי קול עברי מופעל קול מקוון, בלי מפתח ובלי שרת. אפשר לבחור אוטומטי, קול המערכת או קול מקוון, עם שליטה במהירות ו**ניגון אוטומטי**. במצב משחק הקריין אומר את מהלך המאמן ואת המשוב על המהלך שלך.
 - **עיצוב כהה ומודרני**, מתאים למחשב ולנייד. ניווט בחצים במקלדת.
-- **פרטיות:** הכל רץ אצלך בדפדפן. אין שרת ואין מעקב.
+- **פרטיות:** הניתוח רץ אצלך בדפדפן. אין שרת משלנו ואין מעקב. קול מערכת נשאר במכשיר; קול מקוון שולח את משפט ההקראה לנקודת הקצה הציבורית של Google Translate.
 
-גרסה 1.2.
+גרסה 1.3.
 
 ## 🚀 איך משתמשים
 
@@ -40,7 +40,7 @@
 
 **במחשב (אופליין):** מורידים את הריפו (Code ← Download ZIP), מחלצים, ולוחצים לחיצה כפולה על `index.html`. עובד ב-Chrome, Edge ו-Firefox. אין צורך בשרת או בהתקנה. ייבוא משחקים דורש אינטרנט, אבל הניתוח לא.
 
-**קול עברי לקריין (Windows):** הגדרות ← זמן ושפה ← דיבור ← ניהול קולות ← הוספת קולות ← עברית (Microsoft Asaf), ואז להפעיל מחדש את הדפדפן. בדפדפן Edge יש קולות עבריים טבעיים מובנים.
+**קול עברי לקריין:** ב-Edge יש קולות טבעיים (Avri / Hila) והם נבחרים אוטומטית. ב-Chrome ב-Windows בלי קול עברי מותקן הקריין עובר לקול עברי מקוון (צריך אינטרנט). אפשר גם להתקין קול מערכת: הגדרות ← זמן ושפה ← דיבור ← ניהול קולות ← הוספת קולות ← עברית, ואז להפעיל מחדש את הדפדפן.
 
 ## 🛠️ פיתוח
 
@@ -81,17 +81,17 @@
 - **Opening names** in Hebrew from a small ECO list, plus book-move detection.
 - **Game summary** with key moments and what to practise, based on your mistake patterns.
 - **Play vs. the coach:** 8 levels (about 400 to 2700+), a **hint** button, and a **"why?"** explanation after each of your moves.
-- **🔊 Hebrew narrator:** speaks each move, its class and a short explanation through the Web Speech API. It has speed control and an **autoplay** mode. In play mode it announces the coach's move and the feedback on your move.
+- **🔊 Hebrew narrator:** speaks each move, its class and a short explanation. A Hebrew system voice (Edge's Avri / Hila, for example) is preferred; without one, an online Hebrew voice is used, with no API key and no backend. The setting is automatic, system voice, or online voice, with speed control and **autoplay**. In play mode it announces the coach's move and the feedback on your move.
 - Dark, responsive design for desktop and mobile, with keyboard navigation.
-- **Private:** everything runs locally in the browser, with no backend and no tracking.
+- **Private:** analysis runs in the browser. There is no backend of ours and no tracking. A system voice stays on the device; the online voice sends the spoken line to Google Translate's public TTS endpoint.
 
-Version 1.2.
+Version 1.3.
 
 ## Usage
 
 - **Online:** https://igalyuze23.github.io/hebrew-chess-coach/
 - **Offline:** download the repo and double-click `index.html`. It works from `file://` because the engine's WASM file is bundled as base64 in `lib/sf-bundle.js`. Importing games needs internet; analysis doesn't.
-- **Hebrew voice on Windows:** Settings → Time & Language → Speech → Manage voices → Add voices → Hebrew, then restart the browser. Edge also ships natural Hebrew online voices.
+- **Hebrew voice:** Edge's natural voices (Avri / Hila) are selected automatically. Chrome on Windows with no Hebrew voice installed uses the online Hebrew voice (needs internet). A system voice can still be installed under Settings → Time & Language → Speech → Manage voices → Add voices → Hebrew, then restart the browser.
 
 ## Development
 
